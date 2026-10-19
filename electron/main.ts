@@ -510,7 +510,7 @@ function createOverlayWindow(): BrowserWindow {
   const enableRendererSandbox = process.platform !== 'win32';
 
   overlayWindow = new BrowserWindow({
-    width: 340,
+    width: 360,
     height: 76,
     frame: false,
     transparent: true,
@@ -556,7 +556,7 @@ function setOverlayMode(mode: 'collapsed' | 'expanded' | 'preview' | 'error_matc
   if (!overlayWindow || overlayWindow.isDestroyed()) return;
 
   const modeSizes: Record<'collapsed' | 'expanded' | 'preview' | 'error_match' | 'error_new' | 'search', { width: number; height: number }> = {
-    collapsed: { width: 340, height: 76 },
+    collapsed: { width: 360, height: 76 },
     expanded: { width: 380, height: 280 },
     preview: { width: 340, height: 180 },
     error_match: { width: 380, height: 320 },
