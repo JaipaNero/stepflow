@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Maximize2,
-  Sparkles,
   Camera,
   Upload,
   Info,
@@ -48,7 +47,6 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
     activeProject,
     activeStepId,
     updateStep,
-    updateBeautifySettings,
     retakeStepImage,
     setStepAnnotations
   } = useSopStore();
@@ -563,21 +561,6 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
         <div className="flex items-center gap-1.5">
           {currentStep.type === 'screenshot' && (
             <>
-              {/* Beautify quick switch (Icon-Only) */}
-              <button
-                onClick={() => updateBeautifySettings({ enabled: !beautify.enabled })}
-                className={`p-1.5 rounded transition-colors cursor-pointer ${
-                  beautify.enabled
-                    ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs'
-                    : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                }`}
-                title="Toggle Beautify Frame"
-              >
-                <Sparkles className="w-4 h-4" />
-              </button>
-
-              <div className="h-3.5 w-px bg-zinc-200 dark:bg-zinc-800 mx-0.5" />
-
               {/* Interactive Zoom Bar: Stepper + Scrub + Popover */}
               <div ref={zoomMenuRef} className="relative flex items-center bg-zinc-100 dark:bg-zinc-800/80 rounded-lg p-0.5 border border-zinc-200/80 dark:border-zinc-700/60">
                 {/* Zoom Out Button */}
