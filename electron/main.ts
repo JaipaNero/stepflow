@@ -40,9 +40,12 @@ let isCapturing = false;
 let lastActiveProject: SopProject | null = null;
 let currentRetakeStepId: string | null = null;
 
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
-if (!hasSingleInstanceLock) {
-  app.quit();
+if (app.isPackaged) {
+  const hasSingleInstanceLock = app.requestSingleInstanceLock();
+  if (!hasSingleInstanceLock) {
+    appendRuntimeLog('[App] Another instance is already running in production - quitting');
+    app.quit();
+  }
 }
 
 function appendRuntimeLog(message: string, error?: unknown): void {
@@ -445,7 +448,7 @@ function createStudioWindow(): BrowserWindow {
     frame: process.platform === 'darwin' ? false : true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: '#0f172a',
+    backgroundColor: '#fafafa',
     webPreferences: {
       preload: getPreloadPath(),
       contextIsolation: true,
