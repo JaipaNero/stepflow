@@ -12,7 +12,8 @@ import {
   BookOpen,
   ListOrdered,
   Layers,
-  Building2
+  Building2,
+  PanelRight
 } from 'lucide-react';
 import { useSopStore } from '../../store/useSopStore';
 import { CalloutType, DEFAULT_COVER_PAGE_SETTINGS } from '../../types/sop';
@@ -21,11 +22,13 @@ import { RichInstructionsEditor } from './RichInstructionsEditor';
 interface StepInspectorProps {
   onTriggerCapture?: (mode?: 'fullscreen' | 'selection') => void;
   width?: number;
+  onToggleCollapse?: () => void;
 }
 
 export const StepInspector: React.FC<StepInspectorProps> = ({
   onTriggerCapture,
-  width = 288
+  width = 288,
+  onToggleCollapse
 }) => {
   const {
     activeProject,
@@ -53,11 +56,21 @@ export const StepInspector: React.FC<StepInspectorProps> = ({
         style={{ width }}
         className="border-l border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/50 flex flex-col h-full select-none shrink-0 overflow-y-auto"
       >
-        <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 flex items-center shrink-0">
+        <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 tracking-wider uppercase">
             <BookOpen className="w-3.5 h-3.5" />
             <span>Front Cover</span>
           </div>
+          {onToggleCollapse && (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="p-1 rounded-md hover:bg-zinc-200/60 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+              title={`Collapse Step Inspector (${cmdLabel}+I)`}
+            >
+              <PanelRight className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         <div className="p-3.5 space-y-4 text-xs">
@@ -229,11 +242,21 @@ export const StepInspector: React.FC<StepInspectorProps> = ({
         style={{ width }}
         className="border-l border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/50 flex flex-col h-full select-none shrink-0 overflow-y-auto"
       >
-        <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 flex items-center shrink-0">
+        <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 tracking-wider uppercase">
             <ListOrdered className="w-3.5 h-3.5" />
             <span>Table of Contents</span>
           </div>
+          {onToggleCollapse && (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="p-1 rounded-md hover:bg-zinc-200/60 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+              title={`Collapse Step Inspector (${cmdLabel}+I)`}
+            >
+              <PanelRight className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         <div className="p-3.5 space-y-4 text-xs">
@@ -337,11 +360,21 @@ export const StepInspector: React.FC<StepInspectorProps> = ({
       className="border-l border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 flex flex-col h-full text-xs select-none shrink-0 overflow-hidden"
     >
       {/* Inspector Header */}
-      <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 flex items-center shrink-0">
+      <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between shrink-0">
         <span className="font-semibold text-zinc-500 dark:text-zinc-400 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
           <Sliders className="w-3.5 h-3.5" />
           <span>Step Inspector</span>
         </span>
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+            title={`Collapse Step Inspector (${cmdLabel}+I)`}
+          >
+            <PanelRight className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       <div className="p-3.5 space-y-3.5 flex-1 overflow-y-auto">

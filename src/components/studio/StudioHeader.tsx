@@ -10,8 +10,6 @@ import {
   FileSpreadsheet,
   Presentation,
   CheckCircle2,
-  PanelLeft,
-  PanelRight,
   Crop,
   FileText,
   Package
@@ -22,18 +20,10 @@ import { exportToPdf, exportToPptx, exportToHtml, exportToMarkdown } from '../..
 
 interface StudioHeaderProps {
   onTriggerCapture?: (mode?: 'fullscreen' | 'selection') => void;
-  leftOpen?: boolean;
-  rightOpen?: boolean;
-  onToggleLeft?: () => void;
-  onToggleRight?: () => void;
 }
 
 export const StudioHeader: React.FC<StudioHeaderProps> = ({
-  onTriggerCapture,
-  leftOpen = true,
-  rightOpen = true,
-  onToggleLeft,
-  onToggleRight
+  onTriggerCapture
 }) => {
   const {
     activeProject,
@@ -173,7 +163,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
 
   return (
     <header className={`titlebar-drag h-12 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm ${isMac ? 'pl-20' : 'pl-3'} pr-3 flex items-center justify-between select-none relative z-50 shrink-0`}>
-      {/* Left Toolbar: Back, Panel Toggle & Title */}
+      {/* Left Toolbar: Back & Title */}
       <div className="titlebar-no-drag flex items-center gap-2">
         <button
           onClick={() => {
@@ -185,20 +175,6 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
-
-        {onToggleLeft && (
-          <button
-            onClick={onToggleLeft}
-            className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-              leftOpen
-                ? 'text-zinc-700 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800'
-                : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-            }`}
-            title={leftOpen ? `Collapse Step Outline (${cmdLabel}+B)` : `Expand Step Outline (${cmdLabel}+B)`}
-          >
-            <PanelLeft className="w-4 h-4" />
-          </button>
-        )}
 
         <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-0.5" />
 
@@ -358,23 +334,6 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
             </>
           )}
         </div>
-
-        {/* Right Inspector Panel Toggle */}
-        {onToggleRight && (
-          <button
-            onClick={onToggleRight}
-            className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-              rightOpen
-                ? 'text-zinc-700 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800'
-                : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-            }`}
-            title={rightOpen ? `Collapse Step Inspector (${cmdLabel}+I)` : `Expand Step Inspector (${cmdLabel}+I)`}
-          >
-            <PanelRight className="w-4 h-4" />
-          </button>
-        )}
-
-        <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-0.5" />
 
         {/* Minimize to Dot Button (Icon-Only) */}
         <button
