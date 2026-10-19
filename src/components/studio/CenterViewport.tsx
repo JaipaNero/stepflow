@@ -27,6 +27,8 @@ import { AnnotationToolbar, ToolType } from '../canvas/AnnotationToolbar';
 import { KonvaCanvas, KonvaCanvasHandle } from '../canvas/KonvaCanvas';
 import { CoverPageStudio } from './CoverPageStudio';
 import { TableOfContentsStudio } from './TableOfContentsStudio';
+import { RichInstructionsEditor } from './RichInstructionsEditor';
+import { renderMarkdownBlocks } from '../../utils/markdownHelper';
 
 interface CenterViewportProps {
   onTriggerCapture?: (mode?: 'fullscreen' | 'selection') => void;
@@ -449,69 +451,6 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
     }
   };
 
-  // Simple clean markdown parser for text step preview
-  const renderSimpleMarkdown = (content: string) => {
-    return content.split('\n\n').map((block, idx) => {
-      const trimmed = block.trim();
-      if (trimmed.startsWith('### ')) {
-        return (
-          <h3 key={idx} className="text-base font-semibold text-zinc-900 dark:text-zinc-100 my-2">
-            {trimmed.replace('### ', '')}
-          </h3>
-        );
-      }
-      if (trimmed.startsWith('## ')) {
-        return (
-          <h2 key={idx} className="text-lg font-bold text-zinc-900 dark:text-zinc-100 my-3">
-            {trimmed.replace('## ', '')}
-          </h2>
-        );
-      }
-      if (trimmed.startsWith('# ')) {
-        return (
-          <h1 key={idx} className="text-xl font-bold text-zinc-900 dark:text-zinc-100 my-4">
-            {trimmed.replace('# ', '')}
-          </h1>
-        );
-      }
-      if (trimmed.startsWith('> ')) {
-        return (
-          <blockquote
-            key={idx}
-            className="pl-3 border-l-2 border-zinc-400 dark:border-zinc-600 text-xs text-zinc-600 dark:text-zinc-400 italic my-2"
-          >
-            {trimmed.replace('> ', '')}
-          </blockquote>
-        );
-      }
-      if (trimmed.match(/^\d+\.\s/)) {
-        const lines = trimmed.split('\n');
-        return (
-          <ol key={idx} className="list-decimal pl-5 space-y-1 my-2 text-xs text-zinc-700 dark:text-zinc-300">
-            {lines.map((l, li) => (
-              <li key={li}>{l.replace(/^\d+\.\s*/, '')}</li>
-            ))}
-          </ol>
-        );
-      }
-      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-        const lines = trimmed.split('\n');
-        return (
-          <ul key={idx} className="list-disc pl-5 space-y-1 my-2 text-xs text-zinc-700 dark:text-zinc-300">
-            {lines.map((l, li) => (
-              <li key={li}>{l.replace(/^[-*]\s*/, '')}</li>
-            ))}
-          </ul>
-        );
-      }
-      return (
-        <p key={idx} className="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 my-2">
-          {trimmed}
-        </p>
-      );
-    });
-  };
-
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
 
@@ -875,16 +814,14 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                 </div>
 
                 <div className="flex-1 flex flex-col">
-                  <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-wider mb-1">
-                    Markdown Instructions &amp; Documentation
-                  </label>
-                  <textarea
+                  <RichInstructionsEditor
                     value={currentStep.description}
-                    onChange={(e) =>
-                      updateStep(currentStep.id, { description: e.target.value })
+                    onChange={(newDesc) =>
+                      updateStep(currentStep.id, { description: newDesc })
                     }
                     placeholder="Write detailed instructions using standard Markdown (# headers, - lists, > blockquotes)..."
-                    className="w-full flex-1 min-h-[260px] p-3 text-xs font-mono rounded-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-none leading-relaxed"
+                    minHeight="260px"
+                    label="Markdown Instructions & Documentation"
                   />
                 </div>
               </div>
@@ -901,7 +838,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                 </div>
 
                 <div className="flex-1 prose dark:prose-invert max-w-none">
-                  {renderSimpleMarkdown(currentStep.description || '*No instructions provided yet.*')}
+                  {renderMarkdownBlocks(currentStep.description || '*No instructions provided yet.*')}
                 </div>
 
                 {currentStep.callout && currentStep.callout.text && (
