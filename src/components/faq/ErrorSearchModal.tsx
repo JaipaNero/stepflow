@@ -119,15 +119,15 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4 bg-zinc-950/40 backdrop-blur-sm animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] text-zinc-900 dark:text-zinc-100"
+        className="w-full max-w-3xl bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] text-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Spotlight Top Search Bar */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/70">
+        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-zinc-800 bg-zinc-950/70">
           <Search className="w-5 h-5 text-zinc-400 shrink-0" />
           <input
             ref={inputRef}
@@ -135,32 +135,32 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Type error code (e.g. 0x80040115, SAP-1049), symptoms, or keywords..."
-            className="flex-1 bg-transparent border-none text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none"
+            className="flex-1 bg-transparent border-none text-sm text-white placeholder-zinc-500 focus:outline-none"
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery('')}
-              className="p-1 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
           )}
-          <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-700">
+          <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 bg-zinc-800/80 px-2 py-0.5 rounded border border-zinc-700">
             <span>ESC</span>
-            <span className="text-zinc-400 dark:text-zinc-500">to close</span>
+            <span className="text-zinc-500">to close</span>
           </div>
         </div>
 
         {/* Modal Body: Split view (List on left, Preview on right) */}
         <div className="flex-1 flex min-h-[380px] overflow-hidden">
           {/* Left: Results List */}
-          <div className="w-2/5 border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto p-2 space-y-1 bg-zinc-50/50 dark:bg-zinc-900/60">
+          <div className="w-2/5 border-r border-zinc-800 overflow-y-auto p-2 space-y-1 bg-zinc-900/60">
             {filteredItems.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center p-6 text-center text-zinc-400">
-                <FileQuestion className="w-8 h-8 text-zinc-400 dark:text-zinc-500 mb-2" />
-                <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">No matching solutions</p>
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">
+                <FileQuestion className="w-8 h-8 text-zinc-500 mb-2" />
+                <p className="text-xs font-medium text-zinc-300">No matching solutions</p>
+                <p className="text-[11px] text-zinc-500 mt-1">
                   {query ? `No solutions for "${query}"` : 'Knowledge base is currently empty'}
                 </p>
                 {onAddNew && (
@@ -170,7 +170,7 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
                       onClose();
                       onAddNew();
                     }}
-                    className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-950 text-xs font-medium transition-colors cursor-pointer shadow-xs"
+                    className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Create Error Solution</span>
@@ -186,22 +186,22 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
                     onClick={() => setSelectedIndex(idx)}
                     className={`p-2.5 rounded-xl cursor-pointer transition-all flex flex-col gap-1 ${
                       isSelected
-                        ? 'bg-blue-50 dark:bg-blue-600/20 border border-blue-200 dark:border-blue-500/60 shadow-xs'
-                        : 'hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60 border border-transparent'
+                        ? 'bg-blue-600/20 border border-blue-500/60 shadow-sm'
+                        : 'hover:bg-zinc-800/60 border border-transparent'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                      <span className="text-xs font-semibold text-zinc-100 truncate">
                         {item.title}
                       </span>
                       {item.errorCode && (
-                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 dark:border-amber-500/40 shrink-0">
+                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
                           {item.errorCode}
                         </span>
                       )}
                     </div>
 
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2">
+                    <p className="text-[11px] text-zinc-400 line-clamp-2">
                       {item.solution.replace(/[*#_`]/g, '')}
                     </p>
 
@@ -210,7 +210,7 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
                         {item.tags.slice(0, 3).map((tag, tIdx) => (
                           <span
                             key={tIdx}
-                            className="text-[9px] px-1 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                            className="text-[9px] px-1 rounded bg-zinc-800 text-zinc-400"
                           >
                             #{tag}
                           </span>
@@ -224,18 +224,18 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
           </div>
 
           {/* Right: Selected Solution Details & Copy Button */}
-          <div className="flex-1 flex flex-col overflow-y-auto p-4 bg-white dark:bg-zinc-950/40">
+          <div className="flex-1 flex flex-col overflow-y-auto p-4 bg-zinc-950/40">
             {activeItem ? (
               <div className="flex flex-col h-full space-y-4">
                 {/* Header with Title and Code */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-base font-bold text-zinc-900 dark:text-white">{activeItem.title}</h2>
+                      <h2 className="text-base font-bold text-white">{activeItem.title}</h2>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    <div className="flex items-center gap-2 text-xs text-zinc-400">
                       {activeItem.errorCode && (
-                        <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded-md bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 dark:border-amber-500/40">
+                        <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40">
                           Code: {activeItem.errorCode}
                         </span>
                       )}
@@ -253,7 +253,7 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
                           onClose();
                           onEditItem(activeItem);
                         }}
-                        className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                        className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
                         title="Edit solution"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -262,7 +262,7 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleDelete(activeItem)}
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors cursor-pointer"
                       title="Delete solution"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -274,10 +274,10 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleCopySolution(activeItem)}
-                  className={`w-full py-2.5 px-4 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs ${
+                  className={`w-full py-2.5 px-4 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md ${
                     copiedId === activeItem.id
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 font-semibold'
+                      ? 'bg-emerald-600 text-white shadow-emerald-900/50'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-emerald-900/30 active:scale-[0.99]'
                   }`}
                 >
                   {copiedId === activeItem.id ? (
@@ -297,13 +297,13 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
                 {/* Tags */}
                 {activeItem.tags && activeItem.tags.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <Tag className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
+                    <Tag className="w-3.5 h-3.5 text-zinc-500" />
                     {activeItem.tags.map((tag, idx) => (
                       <span
                         key={idx}
-                        className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700"
+                        className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700"
                       >
-                        #{tag}
+                        {tag}
                       </span>
                     ))}
                   </div>
@@ -316,7 +316,7 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
                       Error Screenshot Reference
                     </span>
                     <div
-                      className="relative rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700/80 max-h-36 bg-zinc-950 group cursor-pointer"
+                      className="relative rounded-lg overflow-hidden border border-zinc-700/80 max-h-36 bg-zinc-950 group cursor-pointer"
                       onClick={() => setImagePreviewUrl(formatAssetUrl(activeItem.imagePath))}
                       title="Click to expand screenshot"
                     >
@@ -338,13 +338,13 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
                     Step-by-Step Verified Solution
                   </span>
-                  <div className="bg-zinc-50 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3.5 text-xs text-zinc-800 dark:text-zinc-200 leading-relaxed font-sans prose dark:prose-invert max-w-none">
+                  <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3.5 text-xs text-zinc-200 leading-relaxed font-sans prose prose-invert max-w-none">
                     {renderMarkdownBlocks(activeItem.solution)}
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="h-full flex items-center justify-center text-zinc-400 text-xs">
+              <div className="h-full flex items-center justify-center text-zinc-500 text-xs">
                 Select an error from the list to preview the solution
               </div>
             )}
@@ -352,14 +352,14 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950 flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
+        <div className="px-4 py-2 border-t border-zinc-800 bg-zinc-950 flex items-center justify-between text-[11px] text-zinc-400">
           <div className="flex items-center gap-3">
             <span>
-              Use <kbd className="px-1 py-0.5 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px]">↑</kbd>{' '}
-              <kbd className="px-1 py-0.5 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px]">↓</kbd> to navigate
+              Use <kbd className="px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-[10px]">↑</kbd>{' '}
+              <kbd className="px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-[10px]">↓</kbd> to navigate
             </span>
             <span>
-              <kbd className="px-1 py-0.5 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px]">Ctrl+Enter</kbd> to copy
+              <kbd className="px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-[10px]">Ctrl+Enter</kbd> to copy
             </span>
           </div>
           {onAddNew && (
@@ -369,7 +369,7 @@ export const ErrorSearchModal: React.FC<ErrorSearchModalProps> = ({
                 onClose();
                 onAddNew();
               }}
-              className="inline-flex items-center gap-1 text-zinc-900 dark:text-zinc-100 hover:underline font-medium cursor-pointer"
+              className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add New Error Solution</span>

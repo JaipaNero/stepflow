@@ -6,7 +6,9 @@ import {
   BeautifySettings,
   AnnotationItem,
   CoverPageSettings,
-  DEFAULT_COVER_PAGE_SETTINGS
+  DEFAULT_COVER_PAGE_SETTINGS,
+  ErrorFaqItem,
+  OcrAnalysisResult,
 } from '../types/sop';
 import { SAMPLE_PROJECT, DEFAULT_THEME } from './sampleData';
 
@@ -24,8 +26,21 @@ export interface SopState {
   lastDeletedStep: { step: SopStep; index: number } | null;
   retakeStepId: string | null;
 
+  // Error FAQ State
+  errorFaqItems: ErrorFaqItem[];
+  activeErrorAnalysis: OcrAnalysisResult | null;
+  isAnalyzingOcr: boolean;
+  isSearchHudOpen: boolean;
+
   // Actions
   loadProjects: () => Promise<void>;
+  loadErrorFaq: () => Promise<void>;
+  saveErrorFaqItem: (item: ErrorFaqItem) => Promise<boolean>;
+  deleteErrorFaqItem: (id: string) => Promise<boolean>;
+  setActiveErrorAnalysis: (result: OcrAnalysisResult | null) => void;
+  setIsAnalyzingOcr: (isAnalyzing: boolean) => void;
+  setIsSearchHudOpen: (isOpen: boolean) => void;
+  analyzeImageWithOcr: (imagePathOrBase64: string) => Promise<OcrAnalysisResult | null>;
   createProject: (name?: string, description?: string, author?: string) => SopProject;
   selectProject: (id: string | null) => void;
   syncActiveProjectFromExternal: (project: SopProject | null) => void;
@@ -155,6 +170,12 @@ export const useSopStore = create<SopState>((set, get) => ({
   recentCapture: null,
   lastDeletedStep: null,
   retakeStepId: null,
+
+  // Error FAQ State
+  errorFaqItems: [],
+  activeErrorAnalysis: null,
+  isAnalyzingOcr: false,
+  isSearchHudOpen: false,
 
   loadProjects: async () => {
     try {
@@ -842,5 +863,87 @@ export const useSopStore = create<SopState>((set, get) => ({
 
   setRecentCapture: (capture: string | null) => {
     set({ recentCapture: capture });
+  },
+
+  loadErrorFaq: async () => {
+    try {
+      if (typeof window !== 'undefined' && window.electronAPI?.listErrorFaq) {
+        const items = await window.electronAPI.listErrorFaq();
+        set({ errorFaqItems: items || [] });
+      }
+    } catch (err) {
+      console.error('Failed to load error FAQ items:', err);
+    }
+  },
+
+  saveErrorFaqItem: async (item: ErrorFaqItem): Promise<boolean> => {
+    try {
+      if (typeof window !== 'undefined' && window.electronAPI?.saveErrorFaq) {
+        const success = await window.electronAPI.saveErrorFaq(item);
+        if (success) {
+          const { errorFaqItems } = get();
+          const existingIdx = errorFaqItems.findIndex((i) => i.id === item.id);
+          let updated: ErrorFaqItem[];
+          if (existingIdx >= 0) {
+            updated = [...errorFaqItems];
+            updated[existingIdx] = item;
+          } else {
+            updated = [item, ...errorFaqItems];
+          }
+          set({ errorFaqItems: updated });
+        }
+        return success;
+      }
+      return false;
+    } catch (err) {
+      console.error('Failed to save error FAQ item:', err);
+      return false;
+    }
+  },
+
+  deleteErrorFaqItem: async (id: string): Promise<boolean> => {
+    try {
+      if (typeof window !== 'undefined' && window.electronAPI?.deleteErrorFaq) {
+        const success = await window.electronAPI.deleteErrorFaq(id);
+        if (success) {
+          const { errorFaqItems } = get();
+          set({ errorFaqItems: errorFaqItems.filter((i) => i.id !== id) });
+        }
+        return success;
+      }
+      return false;
+    } catch (err) {
+      console.error('Failed to delete error FAQ item:', err);
+      return false;
+    }
+  },
+
+  setActiveErrorAnalysis: (result: OcrAnalysisResult | null) => {
+    set({ activeErrorAnalysis: result });
+  },
+
+  setIsAnalyzingOcr: (isAnalyzing: boolean) => {
+    set({ isAnalyzingOcr: isAnalyzing });
+  },
+
+  setIsSearchHudOpen: (isOpen: boolean) => {
+    set({ isSearchHudOpen: isOpen });
+  },
+
+  analyzeImageWithOcr: async (imagePathOrBase64: string): Promise<OcrAnalysisResult | null> => {
+    set({ isAnalyzingOcr: true });
+    try {
+      if (typeof window !== 'undefined' && window.electronAPI?.analyzeErrorImage) {
+        const result = await window.electronAPI.analyzeErrorImage(imagePathOrBase64);
+        set({ activeErrorAnalysis: result, isAnalyzingOcr: false });
+        return result;
+      }
+      set({ isAnalyzingOcr: false });
+      return null;
+    } catch (err) {
+      console.error('Failed to analyze image with OCR:', err);
+      set({ isAnalyzingOcr: false });
+      return null;
+    }
   }
 }));
