@@ -160,6 +160,31 @@ export interface SopProject {
   steps: SopStep[];
 }
 
+// Error & FAQ Knowledge Base Data Types
+export interface ErrorFaqItem {
+  id: string;
+  title: string;
+  errorCode?: string; // e.g. "0x80040115", "ERR_CONNECTION_TIMED_OUT", "SAP-1049"
+  rawOcrText: string;
+  imagePath: string; // Stored in stepflow_assets/
+  solution: string; // Rich markdown solution text with bullets, steps, etc.
+  tags: string[]; // e.g. ["Outlook", "VPN", "Network"]
+  createdAt: string; // ISO 8601
+  updatedAt: string;
+  matchCount?: number;
+}
+
+export interface OcrAnalysisResult {
+  rawText: string;
+  detectedTitle?: string;
+  detectedErrorCode?: string;
+  imagePath: string;
+  bestMatch?: {
+    item: ErrorFaqItem;
+    confidence: number; // 0 to 1
+  };
+}
+
 // IPC Channel API Interfaces
 export interface IpcBridge {
   // Capture & Hotkeys
@@ -170,7 +195,7 @@ export interface IpcBridge {
   minimizeToOverlay: (anchor?: { x: number; y: number }) => void;
   restoreStudio: () => void;
   closeOverlay: () => void;
-  setOverlaySize: (mode: 'collapsed' | 'expanded' | 'preview') => void;
+  setOverlaySize: (mode: 'collapsed' | 'expanded' | 'preview' | 'error_match' | 'error_new' | 'search') => void;
   onStudioRestored: (callback: () => void) => () => void;
   syncActiveProject: (project: SopProject | null) => void;
   onActiveProjectSynced: (callback: (project: SopProject | null) => void) => () => void;
@@ -186,6 +211,14 @@ export interface IpcBridge {
   onProjectFileChanged?: (
     callback: (data: { id: string; action: 'save' | 'delete'; project?: SopProject }) => void
   ) => () => void;
+
+  // Error & FAQ Knowledge Base + OCR
+  analyzeErrorImage: (imagePathOrBase64: string) => Promise<OcrAnalysisResult>;
+  listErrorFaq: () => Promise<ErrorFaqItem[]>;
+  saveErrorFaq: (item: ErrorFaqItem) => Promise<boolean>;
+  deleteErrorFaq: (id: string) => Promise<boolean>;
+  importPastedImage: (base64Data: string) => Promise<string>;
+  onOpenSearchHud?: (callback: () => void) => () => void;
   
   // Workspace & Shared Storage
   getWorkspacePath: () => Promise<{ path: string; isCustom: boolean; defaultPath: string }>;
