@@ -68,17 +68,38 @@ export interface SopState {
   setRecentCapture: (capture: string | null) => void;
 }
 
+// Helper to deduplicate projects by ID, keeping the latest updated version
+export function deduplicateProjects(projects: SopProject[]): SopProject[] {
+  const map = new Map<string, SopProject>();
+  for (const p of projects) {
+    if (!p || !p.id) continue;
+    const existing = map.get(p.id);
+    if (!existing) {
+      map.set(p.id, p);
+    } else {
+      const timeExisting = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+      const timeNew = new Date(p.updatedAt || p.createdAt || 0).getTime();
+      if (timeNew >= timeExisting) {
+        map.set(p.id, p);
+      }
+    }
+  }
+  return Array.from(map.values());
+}
+
 // Helper to save projects to storage and IPC if present
 function persistProjects(projects: SopProject[]) {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(projects));
+    const deduped = deduplicateProjects(projects);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(deduped));
   } catch (err) {
     console.error('Failed to save to localStorage:', err);
   }
 }
 
 function broadcastProjectUpdate(project: SopProject, projects: SopProject[]) {
-  persistProjects(projects);
+  const deduped = deduplicateProjects(projects);
+  persistProjects(deduped);
   try {
     localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
   } catch (err) {
@@ -144,7 +165,8 @@ function loadInitialProjects(): { projects: SopProject[]; activeProject: SopProj
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const normalized = parsed.map(normalizeProjectSteps);
+        const deduped = deduplicateProjects(parsed);
+        const normalized = deduped.map(normalizeProjectSteps);
         const savedActiveId = localStorage.getItem(ACTIVE_PROJECT_KEY);
         const active = savedActiveId ? normalized.find((p: SopProject) => p.id === savedActiveId) || normalized[0] : normalized[0];
         return { projects: normalized, activeProject: active || null };
@@ -190,7 +212,7 @@ export const useSopStore = create<SopState>((set, get) => ({
         const { projects } = loadInitialProjects();
         loadedProjects = projects;
       }
-      loadedProjects = loadedProjects.map(normalizeProjectSteps);
+      loadedProjects = deduplicateProjects(loadedProjects).map(normalizeProjectSteps);
       persistProjects(loadedProjects);
 
       const savedActiveId = typeof localStorage !== 'undefined' ? localStorage.getItem(ACTIVE_PROJECT_KEY) : null;
