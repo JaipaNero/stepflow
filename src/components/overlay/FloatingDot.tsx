@@ -58,6 +58,9 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
   const [newErrorSolution, setNewErrorSolution] = useState('');
   const [newErrorTags, setNewErrorTags] = useState('');
 
+  const [isPillHovered, setIsPillHovered] = useState(false);
+  const hoverLeaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -66,8 +69,26 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+      if (hoverLeaveTimeoutRef.current) clearTimeout(hoverLeaveTimeoutRef.current);
     };
   }, []);
+
+  const handleMouseEnterPill = () => {
+    if (hoverLeaveTimeoutRef.current) {
+      clearTimeout(hoverLeaveTimeoutRef.current);
+      hoverLeaveTimeoutRef.current = null;
+    }
+    setIsPillHovered(true);
+  };
+
+  const handleMouseLeavePill = () => {
+    if (hoverLeaveTimeoutRef.current) {
+      clearTimeout(hoverLeaveTimeoutRef.current);
+    }
+    hoverLeaveTimeoutRef.current = setTimeout(() => {
+      setIsPillHovered(false);
+    }, 150);
+  };
 
   // Sync retakeStepId from IPC if changed externally
   useEffect(() => {
@@ -445,18 +466,20 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* 1. COLLAPSED STATE: Glowing Capsule HUD with Drag-and-Drop Dropzone & Shortcuts */}
+      {/* 1. COLLAPSED STATE: Glowing Dynamic Capsule HUD with Icons (Expands shortcuts on hover) */}
       {dotState === 'collapsed' && (
         <div
           onDoubleClick={handleRestoreStudio}
-          className={`titlebar-drag group flex items-center gap-1.5 px-3 py-1.5 bg-zinc-950/95 text-white rounded-full transition-all cursor-grab active:cursor-grabbing ${
+          onMouseEnter={handleMouseEnterPill}
+          onMouseLeave={handleMouseLeavePill}
+          className={`titlebar-drag group/pill flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-950/95 text-white rounded-full transition-all duration-300 ease-out cursor-grab active:cursor-grabbing ${
             isDragOver
               ? 'border-2 border-dashed border-emerald-400 bg-emerald-950/80 shadow-[0_0_24px_rgba(52,211,153,0.8),0_0_8px_#34d399] scale-105'
               : isRetakeMode
               ? 'border border-amber-500/80 shadow-[0_0_14px_rgba(245,158,11,0.7),0_0_24px_rgba(245,158,11,0.35),0_0_3px_#f59e0b] hover:shadow-[0_0_18px_rgba(245,158,11,0.85),0_0_30px_rgba(245,158,11,0.5),0_0_5px_#f59e0b]'
               : 'border border-blue-500/80 shadow-[0_0_14px_rgba(59,130,246,0.7),0_0_24px_rgba(59,130,246,0.35),0_0_3px_#3b82f6] hover:shadow-[0_0_18px_rgba(59,130,246,0.85),0_0_30px_rgba(59,130,246,0.5),0_0_5px_#3b82f6]'
           }`}
-          title="Drag to reposition • Drop error screenshot • Double-click or click [↗] to open Studio"
+          title="Drag to reposition • Drop error screenshot • Hover to view shortcuts • Double-click or click [↗] to open Studio"
         >
           {isDragOver ? (
             <div className="flex items-center gap-2 py-0.5 px-1 text-emerald-300 font-semibold text-xs animate-pulse">
@@ -504,13 +527,15 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
 
               <div className="h-3.5 w-px bg-zinc-700/80 mx-0.5" />
 
-              {/* Quick Action Buttons with Visible Shortcut Keycaps */}
-              <div className="titlebar-no-drag flex items-center gap-1.5">
+              {/* Quick Action Buttons (Compact Icons by Default, Expands on Hover) */}
+              <div className="titlebar-no-drag flex items-center gap-1">
                 {/* Full screen capture */}
                 <button
                   type="button"
                   onClick={handleSnapFullScreen}
-                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                  className={`flex items-center justify-center rounded-full text-xs font-medium transition-all duration-300 cursor-pointer ${
+                    isPillHovered ? 'px-2 py-0.5' : 'p-1.5'
+                  } ${
                     isRetakeMode
                       ? 'bg-amber-950/60 border border-amber-500/50 hover:bg-amber-900/60 text-amber-300'
                       : 'bg-zinc-900/90 border border-zinc-800 hover:border-blue-500/50 hover:bg-zinc-800 text-blue-400'
@@ -522,7 +547,13 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                   }
                 >
                   <Camera className="w-3.5 h-3.5 shrink-0" />
-                  <span className="font-mono text-[10px] font-semibold text-zinc-300 tracking-tight">
+                  <span
+                    className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-out font-mono text-[10px] font-semibold text-zinc-300 tracking-tight ${
+                      isPillHovered
+                        ? 'max-w-[90px] opacity-100 ml-1.5'
+                        : 'max-w-0 opacity-0 ml-0 pointer-events-none'
+                    }`}
+                  >
                     <span className="text-zinc-500 font-sans">{cmdLabel}+</span>Shift+S
                   </span>
                 </button>
@@ -531,7 +562,9 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                 <button
                   type="button"
                   onClick={handleSnapSelection}
-                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-zinc-900/90 border border-zinc-800 hover:border-amber-500/50 hover:bg-zinc-800 text-amber-400 transition-all cursor-pointer text-xs font-medium"
+                  className={`flex items-center justify-center rounded-full bg-zinc-900/90 border border-zinc-800 hover:border-amber-500/50 hover:bg-zinc-800 text-amber-400 transition-all duration-300 cursor-pointer text-xs font-medium ${
+                    isPillHovered ? 'px-2 py-0.5' : 'p-1.5'
+                  }`}
                   title={
                     isRetakeMode && retakeStep
                       ? `Retake selected area for Step ${retakeStep.order} (${cmdLabel}+Shift+A)`
@@ -539,7 +572,13 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                   }
                 >
                   <Crop className="w-3.5 h-3.5 shrink-0" />
-                  <span className="font-mono text-[10px] font-semibold text-zinc-300 tracking-tight">
+                  <span
+                    className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-out font-mono text-[10px] font-semibold text-zinc-300 tracking-tight ${
+                      isPillHovered
+                        ? 'max-w-[90px] opacity-100 ml-1.5'
+                        : 'max-w-0 opacity-0 ml-0 pointer-events-none'
+                    }`}
+                  >
                     <span className="text-zinc-500 font-sans">{cmdLabel}+</span>Shift+A
                   </span>
                 </button>
@@ -551,11 +590,19 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                     setDotState('search');
                     notifyElectronSize('search');
                   }}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-900/90 border border-zinc-800 hover:border-purple-500/50 hover:bg-zinc-800 text-purple-400 transition-all cursor-pointer text-xs font-medium"
+                  className={`flex items-center justify-center rounded-full bg-zinc-900/90 border border-zinc-800 hover:border-purple-500/50 hover:bg-zinc-800 text-purple-400 transition-all duration-300 cursor-pointer text-xs font-medium ${
+                    isPillHovered ? 'px-2 py-0.5' : 'p-1.5'
+                  }`}
                   title={`Quick Error Search HUD (${cmdLabel}+Shift+F)`}
                 >
                   <Search className="w-3.5 h-3.5 shrink-0" />
-                  <span className="font-mono text-[10px] font-semibold text-zinc-300 tracking-tight">
+                  <span
+                    className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-out font-mono text-[10px] font-semibold text-zinc-300 tracking-tight ${
+                      isPillHovered
+                        ? 'max-w-[90px] opacity-100 ml-1.5'
+                        : 'max-w-0 opacity-0 ml-0 pointer-events-none'
+                    }`}
+                  >
                     <span className="text-zinc-500 font-sans">{cmdLabel}+</span>Shift+F
                   </span>
                 </button>
@@ -564,7 +611,7 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                 <button
                   type="button"
                   onClick={handleRestoreStudio}
-                  className="p-1 rounded-full hover:bg-zinc-800 active:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer ml-0.5"
+                  className="p-1.5 rounded-full hover:bg-zinc-800 active:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
                   title={isRetakeMode ? 'Cancel retake & return to Studio' : activeProject ? 'Expand & Open Studio' : 'Restore StepFlow'}
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
