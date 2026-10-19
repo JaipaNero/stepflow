@@ -1,12 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  X,
-  Check,
-  Tag,
-  AlertTriangle,
-  Trash2,
-  Image as ImageIcon
-} from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import { useSopStore } from '../../store/useSopStore';
 import { ErrorFaqItem } from '../../types/sop';
 import { RichInstructionsEditor } from '../studio/RichInstructionsEditor';
@@ -120,88 +113,73 @@ export const ErrorFaqEditorModal: React.FC<ErrorFaqEditorModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-zinc-900 dark:text-zinc-100"
+        className="w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] text-zinc-900 dark:text-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/60">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200/80 dark:border-blue-800/60">
-              <AlertTriangle className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                {itemToEdit ? 'Edit Error & Solution' : 'Add New Error Solution'}
-              </h2>
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                Store in local knowledge base for automatic matching and quick clipboard replies.
-              </p>
-            </div>
-          </div>
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/60">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {itemToEdit ? 'Edit Error Solution' : 'New Error Solution'}
+          </h2>
 
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+            className="p-1 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Form Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* Title & Code in 2 columns */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
-              <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1">
-                Error Title <span className="text-red-500">*</span>
+              <label className="block text-[11px] font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Title <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Outlook Cannot Connect to Exchange Server"
-                className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600"
+                className="w-full px-3 py-2 text-xs rounded-md bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600"
                 autoFocus
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1">
-                Error Code <span className="text-zinc-400 font-normal">(optional)</span>
+              <label className="block text-[11px] font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Error Code
               </label>
               <input
                 type="text"
                 value={errorCode}
                 onChange={(e) => setErrorCode(e.target.value)}
-                placeholder="e.g. 0x80040115, SAP-1049"
-                className="w-full px-3 py-2 text-xs font-mono uppercase rounded-lg bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-amber-600 dark:text-amber-400 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                className="w-full px-3 py-2 text-xs font-mono uppercase rounded-md bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-amber-600 dark:text-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
               />
             </div>
           </div>
 
           {/* Tags */}
           <div>
-            <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-              <Tag className="w-3 h-3 text-zinc-400" />
-              <span>Tags <span className="text-zinc-400 font-normal">(comma-separated)</span></span>
+            <label className="block text-[11px] font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              Tags
             </label>
             <input
               type="text"
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="e.g. Outlook, VPN, Network, Credentials"
-              className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600"
+              className="w-full px-3 py-2 text-xs rounded-md bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600"
             />
           </div>
 
           {/* Screenshot Reference (if attached) */}
           {imagePath && (
             <div className="space-y-1">
-              <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <ImageIcon className="w-3 h-3 text-zinc-400" />
-                  <span>Associated Error Screenshot</span>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+                  Screenshot
                 </span>
                 <button
                   type="button"
@@ -211,8 +189,8 @@ export const ErrorFaqEditorModal: React.FC<ErrorFaqEditorModalProps> = ({
                   <Trash2 className="w-3 h-3" />
                   <span>Remove image</span>
                 </button>
-              </label>
-              <div className="rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-1 max-h-32 flex items-center justify-center">
+              </div>
+              <div className="rounded-md overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 p-1 max-h-32 flex items-center justify-center">
                 <img
                   src={formatAssetUrl(imagePath)}
                   alt="Error screenshot reference"
@@ -227,8 +205,8 @@ export const ErrorFaqEditorModal: React.FC<ErrorFaqEditorModalProps> = ({
             <RichInstructionsEditor
               value={solution}
               onChange={setSolution}
-              label="Step-by-Step Verified Solution (Copied directly to Clipboard)"
-              placeholder="1. Open Control Panel > Mail&#10;2. Click Email Accounts > Repair&#10;3. Restart Outlook."
+              label="Solution"
+              placeholder=""
               rows={6}
               minHeight="140px"
             />
@@ -236,11 +214,11 @@ export const ErrorFaqEditorModal: React.FC<ErrorFaqEditorModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/60">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/60">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-md text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             Cancel
           </button>
@@ -249,10 +227,9 @@ export const ErrorFaqEditorModal: React.FC<ErrorFaqEditorModalProps> = ({
             type="button"
             onClick={handleSave}
             disabled={isSaving || !title.trim()}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 disabled:opacity-50 text-white dark:text-zinc-950 text-xs font-semibold shadow-xs transition-all cursor-pointer"
+            className="px-4 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 disabled:opacity-50 text-white dark:text-zinc-950 text-xs font-medium shadow-xs transition-all cursor-pointer"
           >
-            <Check className="w-4 h-4" />
-            <span>{isSaving ? 'Saving...' : 'Save Error Solution'}</span>
+            {isSaving ? 'Saving...' : 'Save Solution'}
           </button>
         </div>
       </div>
