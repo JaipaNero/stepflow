@@ -38,6 +38,37 @@ let isCapturing = false;
 let lastActiveProject: SopProject | null = null;
 let currentRetakeStepId: string | null = null;
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+}
+
+function appendRuntimeLog(message: string, error?: unknown): void {
+  try {
+    const logsDir = path.join(app.getPath('userData'), 'logs');
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    const logPath = path.join(logsDir, 'runtime.log');
+    const timestamp = new Date().toISOString();
+    const errorText = error
+      ? ` | ${error instanceof Error ? `${error.name}: ${error.message}\n${error.stack || ''}` : String(error)}`
+      : '';
+    fs.appendFileSync(logPath, `[${timestamp}] ${message}${errorText}\n`, 'utf-8');
+  } catch {
+    // Ignore logging errors to avoid blocking startup
+  }
+}
+
+if (process.platform === 'win32') {
+  // Defensive startup flags for environments where Chromium renderer bootstrap fails.
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-software-rasterizer');
+  app.commandLine.appendSwitch('no-sandbox');
+  app.commandLine.appendSwitch('disable-features', 'RendererCodeIntegrity');
+}
+
 // Determine storage paths with configurable workspace directory support
 interface StepFlowConfig {
   customStorageDir?: string | null;
@@ -199,13 +230,18 @@ function createStudioWindow(): BrowserWindow {
     return studioWindow;
   }
 
+  // Some Windows environments block sandboxed renderer startup for unsigned internal apps.
+  const enableRendererSandbox = process.platform !== 'win32';
+
+  const showImmediately = process.platform === 'win32';
+
   studioWindow = new BrowserWindow({
     width: 1280,
     height: 850,
     minWidth: 900,
     minHeight: 600,
     title: 'StepFlow - SOP Creator',
-    show: false,
+    show: showImmediately,
     frame: process.platform === 'darwin' ? false : true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 16, y: 16 },
@@ -215,18 +251,47 @@ function createStudioWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: true,
-      sandbox: true,
+      sandbox: enableRendererSandbox,
       backgroundThrottling: false,
     },
   });
 
   applyWindowSecurity(studioWindow);
 
+  // Failsafe: ensure the window still appears if ready-to-show never fires.
+  const showFallbackTimer = setTimeout(() => {
+    if (studioWindow && !studioWindow.isDestroyed() && !studioWindow.isVisible()) {
+      appendRuntimeLog('[Window] ready-to-show timeout reached, forcing show()');
+      studioWindow.show();
+      studioWindow.focus();
+    }
+  }, 8000);
+
   studioWindow.once('ready-to-show', () => {
+    clearTimeout(showFallbackTimer);
+    appendRuntimeLog('[Window] ready-to-show fired');
     studioWindow?.show();
+    studioWindow?.focus();
+  });
+
+  studioWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    appendRuntimeLog(
+      `[Window] did-fail-load code=${errorCode} description=${errorDescription} url=${validatedURL}`
+    );
+    if (studioWindow && !studioWindow.isDestroyed() && !studioWindow.isVisible()) {
+      studioWindow.show();
+      studioWindow.focus();
+    }
+  });
+
+  studioWindow.webContents.on('render-process-gone', (_event, details) => {
+    appendRuntimeLog(
+      `[Window] render-process-gone reason=${details.reason} exitCode=${details.exitCode}`
+    );
   });
 
   studioWindow.on('closed', () => {
+    clearTimeout(showFallbackTimer);
     studioWindow = null;
     if (process.platform !== 'darwin') {
       if (overlayWindow && !overlayWindow.isDestroyed()) {
@@ -237,6 +302,12 @@ function createStudioWindow(): BrowserWindow {
   });
 
   loadRoute(studioWindow, '#/studio');
+
+  if (showImmediately) {
+    studioWindow.show();
+    studioWindow.focus();
+  }
+
   return studioWindow;
 }
 
@@ -244,6 +315,8 @@ function createOverlayWindow(): BrowserWindow {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     return overlayWindow;
   }
+
+  const enableRendererSandbox = process.platform !== 'win32';
 
   overlayWindow = new BrowserWindow({
     width: 204,
@@ -261,7 +334,7 @@ function createOverlayWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: true,
-      sandbox: true,
+      sandbox: enableRendererSandbox,
       backgroundThrottling: false,
     },
   });
@@ -1326,6 +1399,35 @@ function registerIpcHandlers(): void {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  appendRuntimeLog('[App] whenReady start');
+
+  process.on('uncaughtException', (err) => {
+    appendRuntimeLog('[Process] uncaughtException', err);
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    appendRuntimeLog('[Process] unhandledRejection', reason);
+  });
+
+  app.on('child-process-gone', (_event, details) => {
+    appendRuntimeLog(
+      `[App] child-process-gone type=${details.type} reason=${details.reason} exitCode=${details.exitCode}`
+    );
+  });
+
+  app.on('browser-window-created', (_event, window) => {
+    appendRuntimeLog('[App] browser-window-created');
+    window.on('closed', () => {
+      appendRuntimeLog('[App] browser-window-closed');
+    });
+  });
+
+  app.on('render-process-gone', (_event, webContents, details) => {
+    appendRuntimeLog(
+      `[App] render-process-gone reason=${details.reason} exitCode=${details.exitCode} url=${webContents.getURL()}`
+    );
+  });
+
   loadConfig();
   // Protocol handler for streaming local assets securely
   protocol.handle('stepflow-asset', (request) => {
@@ -1352,17 +1454,18 @@ app.whenReady().then(async () => {
   });
 
   await ensureDirectories();
+  appendRuntimeLog('[App] directories ready');
   setupProjectsFileWatcher();
   registerIpcHandlers();
   registerGlobalShortcuts();
+  appendRuntimeLog('[App] ipc and shortcuts registered');
 
   createStudioWindow();
-  createOverlayWindow();
+  appendRuntimeLog('[App] windows created');
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0 || !studioWindow || studioWindow.isDestroyed()) {
       createStudioWindow();
-      createOverlayWindow();
     } else {
       studioWindow.show();
       studioWindow.focus();
@@ -1370,13 +1473,28 @@ app.whenReady().then(async () => {
   });
 });
 
+app.on('second-instance', () => {
+  if (!studioWindow || studioWindow.isDestroyed()) {
+    createStudioWindow();
+    return;
+  }
+
+  if (studioWindow.isMinimized()) {
+    studioWindow.restore();
+  }
+  studioWindow.show();
+  studioWindow.focus();
+});
+
 app.on('window-all-closed', () => {
+  appendRuntimeLog('[App] window-all-closed');
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('will-quit', () => {
+  appendRuntimeLog('[App] will-quit');
   if (projectWatcher) {
     try {
       projectWatcher.close();

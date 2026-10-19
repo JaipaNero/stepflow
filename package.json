@@ -14,7 +14,9 @@
     "mcp": "node dist-electron/electron/mcp-server.js",
     "build:mcp": "tsc -p tsconfig.electron.json",
     "build:icon": "node scripts/render-icon-node.js",
-    "dist:win": "npm run build && electron-builder --win",
+    "dist:win": "npm run dist:win:exe",
+    "dist:win:exe": "npm run build && electron-builder --win nsis --x64",
+    "dist:win:zip": "npm run build && electron-builder --win zip --x64",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:dir": "npm run build && electron-builder --dir"
   },
