@@ -200,9 +200,18 @@ export const ProjectLibrary: React.FC = () => {
   }, []);
 
   const filteredProjects = useMemo(() => {
+    // Ensure uniqueness by project id
+    const uniqueMap = new Map<string, SopProject>();
+    for (const p of projects) {
+      if (p && p.id && !uniqueMap.has(p.id)) {
+        uniqueMap.set(p.id, p);
+      }
+    }
+    const uniqueProjects = Array.from(uniqueMap.values());
+
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return projects;
-    return projects.filter(
+    if (!q) return uniqueProjects;
+    return uniqueProjects.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         (p.description && p.description.toLowerCase().includes(q)) ||
@@ -320,29 +329,23 @@ export const ProjectLibrary: React.FC = () => {
             )}
           </div>
 
-          {/* Primary Action Button (SOP or Error FAQ) */}
-          {libraryTab === 'sop' ? (
-            <button
-              type="button"
-              onClick={() => setShowNewModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-950 text-xs font-medium transition-colors shadow-xs cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New SOP Project</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
+          {/* Primary Action Button (+ New for both SOP and Error FAQ) */}
+          <button
+            type="button"
+            onClick={() => {
+              if (libraryTab === 'sop') {
+                setShowNewModal(true);
+              } else {
                 setEditorItem(null);
                 setShowEditorModal(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-950 text-xs font-medium transition-colors shadow-xs cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Error Solution</span>
-            </button>
-          )}
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-950 text-xs font-medium transition-colors shadow-xs cursor-pointer"
+            title={libraryTab === 'sop' ? 'New SOP Project' : 'New Error Solution'}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>New</span>
+          </button>
 
           {/* Menu Dropdown for Tools & Workspace */}
           <div className="relative">

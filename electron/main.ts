@@ -1379,20 +1379,40 @@ function registerIpcHandlers(): void {
       const projectsDir = getProjectsDir();
       const files = await fs.promises.readdir(projectsDir);
       const jsonFiles = files.filter((f) => f.endsWith('.json'));
-      const projects: SopProject[] = [];
+      const projectMap = new Map<string, { project: SopProject; file: string; mtime: number }>();
 
       for (const file of jsonFiles) {
         try {
           const filePath = path.join(projectsDir, file);
+          const stat = await fs.promises.stat(filePath);
           const raw = await fs.promises.readFile(filePath, 'utf-8');
           const project = JSON.parse(raw) as SopProject;
           if (project && project.id) {
-            projects.push(project);
+            const existing = projectMap.get(project.id);
+            const projectTime = new Date(project.updatedAt || project.createdAt || 0).getTime() || stat.mtimeMs;
+            if (!existing) {
+              projectMap.set(project.id, { project, file, mtime: projectTime });
+            } else {
+              if (projectTime >= existing.mtime) {
+                // If the old file was a legacy name without proj_, remove it
+                if (!existing.file.startsWith('proj_') && file.startsWith('proj_')) {
+                  fs.promises.unlink(path.join(projectsDir, existing.file)).catch(() => {});
+                }
+                projectMap.set(project.id, { project, file, mtime: projectTime });
+              } else {
+                // If this file is older and has legacy name, remove it
+                if (!file.startsWith('proj_') && existing.file.startsWith('proj_')) {
+                  fs.promises.unlink(filePath).catch(() => {});
+                }
+              }
+            }
           }
         } catch (err) {
           console.warn(`[ProjectIO] Could not parse project file ${file}:`, err);
         }
       }
+
+      const projects = Array.from(projectMap.values()).map((v) => v.project);
 
       projects.sort((a, b) => {
         const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
