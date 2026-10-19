@@ -50,6 +50,10 @@ export const ProjectLibrary: React.FC = () => {
   const [showEditorModal, setShowEditorModal] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Clear search when switching tabs so results don't bleed across views
+  useEffect(() => { setSearchQuery(''); }, [libraryTab]);
+
   const [showNewModal, setShowNewModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
@@ -99,11 +103,12 @@ export const ProjectLibrary: React.FC = () => {
     loadErrorFaq();
   }, [loadErrorFaq]);
 
-  // Global search HUD shortcut listener (Ctrl+Shift+F)
+  // Global search shortcut listener (Ctrl+Shift+F) → focus the header search input
   useEffect(() => {
     if (typeof window !== 'undefined' && window.electronAPI?.onOpenSearchHud) {
       const unsub = window.electronAPI.onOpenSearchHud(() => {
-        setShowSearchHud(true);
+        const el = document.getElementById('global-search-input') as HTMLInputElement | null;
+        if (el) { el.focus(); el.select(); }
       });
       return unsub;
     }
@@ -291,19 +296,29 @@ export const ProjectLibrary: React.FC = () => {
 
         {/* Right: Search, Primary Action & Settings Menu */}
         <div className="titlebar-no-drag flex items-center gap-2.5">
-          {/* Quick Spotlight Search HUD shortcut */}
-          <button
-            type="button"
-            onClick={() => setShowSearchHud(true)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 text-xs font-medium transition-colors shadow-xs cursor-pointer"
-            title="Open Spotlight Search (Ctrl+Shift+F)"
-          >
-            <Search className="w-3.5 h-3.5 text-zinc-400" />
-            <span className="hidden sm:inline">Search</span>
-            <kbd className="font-mono text-[10px] text-zinc-400 dark:text-zinc-500 ml-0.5">
-              {isMac ? 'Cmd' : 'Ctrl'}+Shift+F
-            </kbd>
-          </button>
+          {/* Global context-aware search input */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="global-search-input"
+              type="text"
+              placeholder={libraryTab === 'sop' ? 'Search SOP procedures…' : 'Search error solutions…'}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setSearchQuery(''); }}
+              className="w-52 pl-8 pr-3 py-1.5 text-xs rounded-md bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 focus:w-72 transition-all duration-200 shadow-xs"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
 
           {/* Primary Action Button (SOP or Error FAQ) */}
           {libraryTab === 'sop' ? (
@@ -572,6 +587,7 @@ export const ProjectLibrary: React.FC = () => {
         <div className="flex-1 overflow-y-auto">
           {libraryTab === 'error_faq' ? (
             <ErrorKnowledgeBaseView
+              searchQuery={searchQuery}
               onAddNew={() => {
                 setEditorItem(null);
                 setShowEditorModal(true);
@@ -583,28 +599,9 @@ export const ProjectLibrary: React.FC = () => {
             />
           ) : (
             <main className="flex-1 max-w-6xl w-full mx-auto p-6 md:p-8 flex flex-col">
-        {/* Search & Statistics Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search procedures by title, tag, or author..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 transition-all"
-            />
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-            <span>
-              {filteredProjects.length}{' '}
-              {filteredProjects.length === 1 ? 'project' : 'projects'}
-            </span>
-          </div>
-        </div>
 
         {/* Project List */}
+
         {filteredProjects.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-zinc-300 dark:border-zinc-800 rounded-lg p-12 text-center bg-white/50 dark:bg-zinc-900/40">
             <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 mb-3">
