@@ -117,6 +117,9 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
   const isRetakeMode = Boolean(retakeStepId && retakeStep);
   const isMac = typeof window !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || window.navigator.userAgent);
   const cmdLabel = isMac ? 'Cmd' : 'Ctrl';
+  const shortcutFullLabel = isMac ? '⌘⇧S' : 'Ctrl+⇧S';
+  const shortcutAreaLabel = isMac ? '⌘⇧A' : 'Ctrl+⇧A';
+  const shortcutSearchLabel = isMac ? '⌘⇧F' : 'Ctrl+⇧F';
 
   // Update overlay window size via Electron IPC
   const notifyElectronSize = (mode: DotState) => {
@@ -528,12 +531,12 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
               <div className="h-3.5 w-px bg-zinc-700/80 mx-0.5" />
 
               {/* Quick Action Buttons (Compact Icons by Default, Expands on Hover) */}
-              <div className="titlebar-no-drag flex items-center gap-1">
+              <div className="titlebar-no-drag flex items-center gap-1 shrink-0">
                 {/* Full screen capture */}
                 <button
                   type="button"
                   onClick={handleSnapFullScreen}
-                  className={`flex items-center justify-center rounded-full text-xs font-medium transition-all duration-300 cursor-pointer ${
+                  className={`flex items-center justify-center rounded-full text-xs font-medium transition-all duration-200 cursor-pointer shrink-0 ${
                     isPillHovered ? 'px-2 py-0.5' : 'p-1.5'
                   } ${
                     isRetakeMode
@@ -548,13 +551,13 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                 >
                   <Camera className="w-3.5 h-3.5 shrink-0" />
                   <span
-                    className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-out font-mono text-[10px] font-semibold text-zinc-300 tracking-tight ${
+                    className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-out font-mono text-[10px] font-semibold tracking-tight text-zinc-300 ${
                       isPillHovered
-                        ? 'max-w-[90px] opacity-100 ml-1.5'
+                        ? 'max-w-[50px] opacity-100 ml-1'
                         : 'max-w-0 opacity-0 ml-0 pointer-events-none'
                     }`}
                   >
-                    <span className="text-zinc-500 font-sans">{cmdLabel}+</span>Shift+S
+                    {shortcutFullLabel}
                   </span>
                 </button>
 
@@ -562,7 +565,7 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                 <button
                   type="button"
                   onClick={handleSnapSelection}
-                  className={`flex items-center justify-center rounded-full bg-zinc-900/90 border border-zinc-800 hover:border-amber-500/50 hover:bg-zinc-800 text-amber-400 transition-all duration-300 cursor-pointer text-xs font-medium ${
+                  className={`flex items-center justify-center rounded-full bg-zinc-900/90 border border-zinc-800 hover:border-amber-500/50 hover:bg-zinc-800 text-amber-400 transition-all duration-200 cursor-pointer text-xs font-medium shrink-0 ${
                     isPillHovered ? 'px-2 py-0.5' : 'p-1.5'
                   }`}
                   title={
@@ -573,13 +576,13 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                 >
                   <Crop className="w-3.5 h-3.5 shrink-0" />
                   <span
-                    className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-out font-mono text-[10px] font-semibold text-zinc-300 tracking-tight ${
+                    className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-out font-mono text-[10px] font-semibold tracking-tight text-zinc-300 ${
                       isPillHovered
-                        ? 'max-w-[90px] opacity-100 ml-1.5'
+                        ? 'max-w-[50px] opacity-100 ml-1'
                         : 'max-w-0 opacity-0 ml-0 pointer-events-none'
                     }`}
                   >
-                    <span className="text-zinc-500 font-sans">{cmdLabel}+</span>Shift+A
+                    {shortcutAreaLabel}
                   </span>
                 </button>
 
@@ -590,20 +593,20 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                     setDotState('search');
                     notifyElectronSize('search');
                   }}
-                  className={`flex items-center justify-center rounded-full bg-zinc-900/90 border border-zinc-800 hover:border-purple-500/50 hover:bg-zinc-800 text-purple-400 transition-all duration-300 cursor-pointer text-xs font-medium ${
+                  className={`flex items-center justify-center rounded-full bg-zinc-900/90 border border-zinc-800 hover:border-purple-500/50 hover:bg-zinc-800 text-purple-400 transition-all duration-200 cursor-pointer text-xs font-medium shrink-0 ${
                     isPillHovered ? 'px-2 py-0.5' : 'p-1.5'
                   }`}
                   title={`Quick Error Search HUD (${cmdLabel}+Shift+F)`}
                 >
                   <Search className="w-3.5 h-3.5 shrink-0" />
                   <span
-                    className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-out font-mono text-[10px] font-semibold text-zinc-300 tracking-tight ${
+                    className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-out font-mono text-[10px] font-semibold tracking-tight text-zinc-300 ${
                       isPillHovered
-                        ? 'max-w-[90px] opacity-100 ml-1.5'
+                        ? 'max-w-[50px] opacity-100 ml-1'
                         : 'max-w-0 opacity-0 ml-0 pointer-events-none'
                     }`}
                   >
-                    <span className="text-zinc-500 font-sans">{cmdLabel}+</span>Shift+F
+                    {shortcutSearchLabel}
                   </span>
                 </button>
 
@@ -611,7 +614,7 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                 <button
                   type="button"
                   onClick={handleRestoreStudio}
-                  className="p-1.5 rounded-full hover:bg-zinc-800 active:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  className="p-1.5 rounded-full hover:bg-zinc-800 active:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
                   title={isRetakeMode ? 'Cancel retake & return to Studio' : activeProject ? 'Expand & Open Studio' : 'Restore StepFlow'}
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
