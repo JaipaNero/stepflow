@@ -1,0 +1,944 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Maximize2,
+  Sparkles,
+  Camera,
+  Upload,
+  Info,
+  AlertTriangle,
+  Lightbulb,
+  FileText,
+  PanelLeftOpen,
+  PanelRightOpen,
+  Minus,
+  Plus,
+  SlidersHorizontal,
+  Crop
+} from 'lucide-react';
+import { useSopStore } from '../../store/useSopStore';
+import {
+  CalloutType,
+  AnnotationItem,
+  TextSettings,
+  DEFAULT_TEXT_SETTINGS,
+  LoupeSettings,
+  DEFAULT_LOUPE_SETTINGS
+} from '../../types/sop';
+import { AnnotationToolbar, ToolType } from '../canvas/AnnotationToolbar';
+import { KonvaCanvas, KonvaCanvasHandle } from '../canvas/KonvaCanvas';
+import { CoverPageStudio } from './CoverPageStudio';
+import { TableOfContentsStudio } from './TableOfContentsStudio';
+
+interface CenterViewportProps {
+  onTriggerCapture?: (mode?: 'fullscreen' | 'selection') => void;
+  leftOpen?: boolean;
+  rightOpen?: boolean;
+  onOpenLeft?: () => void;
+  onOpenRight?: () => void;
+}
+
+export const CenterViewport: React.FC<CenterViewportProps> = ({
+  onTriggerCapture,
+  leftOpen = true,
+  rightOpen = true,
+  onOpenLeft,
+  onOpenRight
+}) => {
+  const {
+    activeProject,
+    activeStepId,
+    updateStep,
+    updateBeautifySettings,
+    retakeStepImage,
+    setStepAnnotations
+  } = useSopStore();
+
+  const [zoomPercent, setZoomPercent] = useState<number>(75);
+  const [showZoomMenu, setShowZoomMenu] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('preview');
+
+  const viewportScrollRef = useRef<HTMLDivElement | null>(null);
+  const zoomMenuRef = useRef<HTMLDivElement | null>(null);
+  const scrubStartRef = useRef<{ y: number; zoom: number; moved: boolean }>({ y: 0, zoom: 75, moved: false });
+
+  // Annotation Canvas State
+  const [activeTool, setActiveTool] = useState<ToolType>('select');
+  const [currentColor, setCurrentColor] = useState<string>('#2563eb');
+  const [currentStrokeWidth, setCurrentStrokeWidth] = useState<number>(3);
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
+  const [textSettings, setTextSettings] = useState<TextSettings>(DEFAULT_TEXT_SETTINGS);
+  const [loupeSettings, setLoupeSettings] = useState<LoupeSettings>(DEFAULT_LOUPE_SETTINGS);
+
+  // Undo/Redo History Stack
+  const [history, setHistory] = useState<AnnotationItem[][]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+
+  const canvasRef = useRef<KonvaCanvasHandle | null>(null);
+
+  const currentStep = activeProject?.steps.find((s) => s.id === activeStepId);
+
+  // Initialize history when step changes
+  useEffect(() => {
+    if (currentStep?.image) {
+      const initial = currentStep.image.annotations || [];
+      setHistory([initial]);
+      setHistoryIndex(0);
+      setSelectedAnnotationId(null);
+    }
+  }, [currentStep?.id]);
+
+  const annotations = currentStep?.image?.annotations || [];
+
+  // Sync text & loupe settings if user selects an annotation on canvas
+  useEffect(() => {
+    if (selectedAnnotationId) {
+      const selectedItem = annotations.find((a) => a.id === selectedAnnotationId);
+      if (selectedItem && selectedItem.type === 'text') {
+        setTextSettings((prev) => ({
+          fontSize: selectedItem.fontSize || prev.fontSize,
+          bold: selectedItem.fontWeight === 'bold',
+          italic: selectedItem.fontStyle === 'italic',
+          hasBackground: selectedItem.hasBackground !== false
+        }));
+      } else if (selectedItem && selectedItem.type === 'zoom_loupe') {
+        setLoupeSettings({
+          radius: selectedItem.radius || DEFAULT_LOUPE_SETTINGS.radius,
+          zoomFactor: selectedItem.zoomFactor || DEFAULT_LOUPE_SETTINGS.zoomFactor
+        });
+      }
+    }
+  }, [selectedAnnotationId, annotations]);
+
+  const handleAnnotationsChange = useCallback(
+    (newAnnotations: AnnotationItem[]) => {
+      if (!currentStep) return;
+
+      setStepAnnotations(currentStep.id, newAnnotations);
+
+      setHistory((prevHistory) => {
+        const nextHistory = prevHistory.slice(0, historyIndex + 1);
+        nextHistory.push(newAnnotations);
+        if (nextHistory.length > 50) {
+          nextHistory.shift();
+        }
+        return nextHistory;
+      });
+      setHistoryIndex((prevIndex) => Math.min(prevIndex + 1, 49));
+    },
+    [currentStep, historyIndex, setStepAnnotations]
+  );
+
+  const handleTextSettingsChange = (newSettings: TextSettings) => {
+    setTextSettings(newSettings);
+    if (selectedAnnotationId && currentStep) {
+      const selectedItem = annotations.find((a) => a.id === selectedAnnotationId);
+      if (selectedItem && selectedItem.type === 'text') {
+        const updated: AnnotationItem[] = annotations.map((a) =>
+          a.id === selectedAnnotationId
+            ? {
+                ...a,
+                fontSize: newSettings.fontSize,
+                fontWeight: (newSettings.bold ? 'bold' : 'normal') as 'normal' | 'bold',
+                fontStyle: (newSettings.italic ? 'italic' : 'normal') as 'normal' | 'italic',
+                hasBackground: newSettings.hasBackground
+              }
+            : a
+        );
+        handleAnnotationsChange(updated);
+      }
+    }
+  };
+
+  const handleLoupeSettingsChange = (newSettings: LoupeSettings) => {
+    setLoupeSettings(newSettings);
+    if (selectedAnnotationId && currentStep) {
+      const selectedItem = annotations.find((a) => a.id === selectedAnnotationId);
+      if (selectedItem && selectedItem.type === 'zoom_loupe') {
+        const updated: AnnotationItem[] = annotations.map((a) =>
+          a.id === selectedAnnotationId
+            ? {
+                ...a,
+                radius: newSettings.radius,
+                zoomFactor: newSettings.zoomFactor
+              }
+            : a
+        );
+        handleAnnotationsChange(updated);
+      }
+    }
+  };
+
+  const handleUndo = useCallback(() => {
+    if (historyIndex > 0 && currentStep) {
+      const targetIndex = historyIndex - 1;
+      const targetAnnotations = history[targetIndex];
+      setHistoryIndex(targetIndex);
+      setStepAnnotations(currentStep.id, targetAnnotations);
+    }
+  }, [history, historyIndex, currentStep, setStepAnnotations]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndex < history.length - 1 && currentStep) {
+      const targetIndex = historyIndex + 1;
+      const targetAnnotations = history[targetIndex];
+      setHistoryIndex(targetIndex);
+      setStepAnnotations(currentStep.id, targetAnnotations);
+    }
+  }, [history, historyIndex, currentStep, setStepAnnotations]);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (!selectedAnnotationId || !currentStep) return;
+    const remaining = annotations.filter((a) => a.id !== selectedAnnotationId);
+    handleAnnotationsChange(remaining);
+    setSelectedAnnotationId(null);
+  }, [selectedAnnotationId, currentStep, annotations, handleAnnotationsChange]);
+
+  const handleClearAll = useCallback(() => {
+    if (!currentStep) return;
+    handleAnnotationsChange([]);
+    setSelectedAnnotationId(null);
+  }, [currentStep, handleAnnotationsChange]);
+
+  const handleImageCropped = useCallback(
+    (newImageSrc: string, updatedAnnotations: AnnotationItem[]) => {
+      if (!currentStep) return;
+      retakeStepImage(currentStep.id, newImageSrc);
+      handleAnnotationsChange(updatedAnnotations);
+      setActiveTool('select');
+    },
+    [currentStep, retakeStepImage, handleAnnotationsChange]
+  );
+
+  // Zoom control helpers
+  const handleZoomIn = useCallback(() => {
+    setZoomPercent((prev) => Math.min(200, prev + (prev < 100 ? 15 : 25)));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomPercent((prev) => Math.max(25, prev - (prev <= 100 ? 15 : 25)));
+  }, []);
+
+  const handleZoomFit = useCallback(() => {
+    setZoomPercent(75);
+  }, []);
+
+  // Scrubbing on the zoom badge (press and drag up/down or left/right)
+  const handleScrubMouseDown = (e: React.MouseEvent) => {
+    scrubStartRef.current = {
+      y: e.clientY,
+      zoom: zoomPercent,
+      moved: false
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const dy = scrubStartRef.current.y - moveEvent.clientY; // drag up = zoom in
+      if (Math.abs(dy) > 2) {
+        scrubStartRef.current.moved = true;
+        const newZoom = Math.min(200, Math.max(25, scrubStartRef.current.zoom + Math.round(dy * 0.75)));
+        setZoomPercent(newZoom);
+      }
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleZoomBadgeClick = () => {
+    if (scrubStartRef.current.moved) {
+      scrubStartRef.current.moved = false;
+      return;
+    }
+    setShowZoomMenu((prev) => !prev);
+  };
+
+  // Close zoom menu on click outside or escape
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      if (zoomMenuRef.current && !zoomMenuRef.current.contains(e.target as Node)) {
+        setShowZoomMenu(false);
+      }
+    };
+    const handleGlobalEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowZoomMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleGlobalClick);
+    document.addEventListener('keydown', handleGlobalEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleGlobalClick);
+      document.removeEventListener('keydown', handleGlobalEscape);
+    };
+  }, []);
+
+  // Trackpad / Mouse Wheel Zoom with Ctrl or Cmd
+  useEffect(() => {
+    const container = viewportScrollRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 5 : -5;
+        setZoomPercent((prev) => Math.min(200, Math.max(25, prev + delta)));
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
+
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      // Undo: Ctrl+Z / Cmd+Z
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        if (historyIndex > 0) {
+          e.preventDefault();
+          handleUndo();
+          return;
+        }
+        const lastDeleted = useSopStore.getState().lastDeletedStep;
+        if (lastDeleted) {
+          e.preventDefault();
+          useSopStore.getState().revertDeletedStep();
+          return;
+        }
+      }
+
+      // Redo: Ctrl+Y or Ctrl+Shift+Z
+      if (
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && e.shiftKey)
+      ) {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+
+      // Delete: Delete or Backspace
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedAnnotationId) {
+          e.preventDefault();
+          handleDeleteSelected();
+        }
+        return;
+      }
+
+      // Zoom shortcuts: Cmd/Ctrl + Plus, Minus, 0
+      if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        handleZoomIn();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        handleZoomOut();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        handleZoomFit();
+        return;
+      }
+
+      // Escape: deselect and reset to select tool
+      if (e.key === 'Escape') {
+        if (selectedAnnotationId || activeTool !== 'select') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          setSelectedAnnotationId(null);
+          setActiveTool('select');
+          return;
+        }
+      }
+
+      // Tool shortcuts (without modifier keys)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const k = e.key.toLowerCase();
+        if (k === 'v') setActiveTool('select');
+        else if (k === 'b') setActiveTool('badge');
+        else if (k === 'a') setActiveTool('arrow');
+        else if (k === 'r') setActiveTool('rectangle');
+        else if (k === 'x') setActiveTool('blur');
+        else if (k === 'z') setActiveTool('zoom_loupe');
+        else if (k === 't') setActiveTool('text');
+        else if (k === 'c') setActiveTool('crop');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedAnnotationId, handleUndo, handleRedo, handleDeleteSelected, handleZoomIn, handleZoomOut, handleZoomFit, activeTool]);
+
+  if (!activeProject || !currentStep) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-zinc-100/60 dark:bg-zinc-950/60 p-8 text-center select-none">
+        <div className="w-12 h-12 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 mb-3">
+          <FileText className="w-6 h-6" />
+        </div>
+        <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          No step selected
+        </h3>
+        <p className="text-xs text-zinc-400 mt-1 max-w-xs">
+          Select a step from the left outline or add a new screenshot or text step to get started.
+        </p>
+      </div>
+    );
+  }
+
+  const beautify = activeProject.theme.beautifySettings;
+
+  // Calculate next badge number
+  const existingBadges = annotations
+    .filter((a) => a.type === 'badge')
+    .map((a) => a.badgeNumber || 0);
+  const nextBadgeNumber =
+    existingBadges.length > 0 ? Math.max(...existingBadges) + 1 : 1;
+
+  const handleUploadImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (result && activeStepId) {
+          retakeStepImage(activeStepId, result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const getCalloutIcon = (type?: CalloutType) => {
+    switch (type) {
+      case 'tip':
+        return <Lightbulb className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />;
+      case 'warning':
+        return <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />;
+      default:
+        return <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />;
+    }
+  };
+
+  const getCalloutStyles = (type?: CalloutType) => {
+    switch (type) {
+      case 'tip':
+        return 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-900 dark:text-emerald-200';
+      case 'warning':
+        return 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/80 text-amber-900 dark:text-amber-200';
+      default:
+        return 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800/80 text-blue-900 dark:text-blue-200';
+    }
+  };
+
+  // Simple clean markdown parser for text step preview
+  const renderSimpleMarkdown = (content: string) => {
+    return content.split('\n\n').map((block, idx) => {
+      const trimmed = block.trim();
+      if (trimmed.startsWith('### ')) {
+        return (
+          <h3 key={idx} className="text-base font-semibold text-zinc-900 dark:text-zinc-100 my-2">
+            {trimmed.replace('### ', '')}
+          </h3>
+        );
+      }
+      if (trimmed.startsWith('## ')) {
+        return (
+          <h2 key={idx} className="text-lg font-bold text-zinc-900 dark:text-zinc-100 my-3">
+            {trimmed.replace('## ', '')}
+          </h2>
+        );
+      }
+      if (trimmed.startsWith('# ')) {
+        return (
+          <h1 key={idx} className="text-xl font-bold text-zinc-900 dark:text-zinc-100 my-4">
+            {trimmed.replace('# ', '')}
+          </h1>
+        );
+      }
+      if (trimmed.startsWith('> ')) {
+        return (
+          <blockquote
+            key={idx}
+            className="pl-3 border-l-2 border-zinc-400 dark:border-zinc-600 text-xs text-zinc-600 dark:text-zinc-400 italic my-2"
+          >
+            {trimmed.replace('> ', '')}
+          </blockquote>
+        );
+      }
+      if (trimmed.match(/^\d+\.\s/)) {
+        const lines = trimmed.split('\n');
+        return (
+          <ol key={idx} className="list-decimal pl-5 space-y-1 my-2 text-xs text-zinc-700 dark:text-zinc-300">
+            {lines.map((l, li) => (
+              <li key={li}>{l.replace(/^\d+\.\s*/, '')}</li>
+            ))}
+          </ol>
+        );
+      }
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        const lines = trimmed.split('\n');
+        return (
+          <ul key={idx} className="list-disc pl-5 space-y-1 my-2 text-xs text-zinc-700 dark:text-zinc-300">
+            {lines.map((l, li) => (
+              <li key={li}>{l.replace(/^[-*]\s*/, '')}</li>
+            ))}
+          </ul>
+        );
+      }
+      return (
+        <p key={idx} className="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 my-2">
+          {trimmed}
+        </p>
+      );
+    });
+  };
+
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex < history.length - 1;
+
+  if (activeStepId === 'cover') {
+    return (
+      <div className="flex-1 flex flex-col bg-zinc-100/70 dark:bg-zinc-950/80 overflow-hidden relative">
+        <CoverPageStudio />
+      </div>
+    );
+  }
+
+  if (activeStepId === 'index') {
+    return (
+      <div className="flex-1 flex flex-col bg-zinc-100/70 dark:bg-zinc-950/80 overflow-hidden relative">
+        <TableOfContentsStudio />
+      </div>
+    );
+  }
+
+  if (!currentStep) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-zinc-100/70 dark:bg-zinc-950/80 text-zinc-400 text-xs select-none">
+        Select a step from the outline or customize the front cover page.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col bg-zinc-100/70 dark:bg-zinc-950/80 overflow-hidden relative">
+      {/* Top Viewport Toolbar */}
+      <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-900/90 flex items-center justify-between text-xs select-none shrink-0 z-10">
+        <div className="flex items-center gap-1.5">
+          {!leftOpen && onOpenLeft && (
+            <button
+              onClick={onOpenLeft}
+              className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer mr-0.5"
+              title="Expand Step Outline (Cmd+B)"
+            >
+              <PanelLeftOpen className="w-4 h-4" />
+            </button>
+          )}
+          <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-[11px] uppercase tracking-wider">
+            Step {currentStep.order}: {currentStep.type === 'screenshot' ? 'Visual Step' : 'Documentation Step'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {currentStep.type === 'screenshot' && (
+            <>
+              {/* Beautify quick switch (Icon-Only) */}
+              <button
+                onClick={() => updateBeautifySettings({ enabled: !beautify.enabled })}
+                className={`p-1.5 rounded transition-colors cursor-pointer ${
+                  beautify.enabled
+                    ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs'
+                    : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                }`}
+                title="Toggle Beautify Frame"
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
+
+              <div className="h-3.5 w-px bg-zinc-200 dark:bg-zinc-800 mx-0.5" />
+
+              {/* Interactive Zoom Bar: Stepper + Scrub + Popover */}
+              <div ref={zoomMenuRef} className="relative flex items-center bg-zinc-100 dark:bg-zinc-800/80 rounded-lg p-0.5 border border-zinc-200/80 dark:border-zinc-700/60">
+                {/* Zoom Out Button */}
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  disabled={zoomPercent <= 25}
+                  className="p-1 rounded text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/70 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                  title="Zoom Out (Cmd -)"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+
+                {/* Scrub / Clickable Zoom Badge */}
+                <button
+                  type="button"
+                  onMouseDown={handleScrubMouseDown}
+                  onClick={handleZoomBadgeClick}
+                  title="Click for slider & presets, or drag up/down to zoom"
+                  className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/80 dark:hover:bg-zinc-700/80 transition-colors cursor-ns-resize flex items-center gap-0.5 select-none"
+                >
+                  <span>{zoomPercent}%</span>
+                  <SlidersHorizontal className="w-2.5 h-2.5 opacity-40 ml-0.5" />
+                </button>
+
+                {/* Zoom In Button */}
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  disabled={zoomPercent >= 200}
+                  className="p-1 rounded text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/70 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                  title="Zoom In (Cmd +)"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+
+                {/* Fit / Reset Button */}
+                <button
+                  type="button"
+                  onClick={handleZoomFit}
+                  className={`p-1 rounded transition-colors cursor-pointer ${
+                    zoomPercent === 75
+                      ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100'
+                      : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                  }`}
+                  title="Reset to 75% (Cmd 0)"
+                >
+                  <Maximize2 className="w-3 h-3" />
+                </button>
+
+                {/* Zoom Slider & Presets Popover */}
+                {showZoomMenu && (
+                  <div className="absolute right-0 top-full mt-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-xl p-3 z-50 min-w-[210px] flex flex-col gap-2.5 animate-in fade-in zoom-in-95 text-zinc-800 dark:text-zinc-200 select-none">
+                    <div className="flex items-center justify-between pb-1 border-b border-zinc-100 dark:border-zinc-800">
+                      <span className="text-[11px] font-semibold text-zinc-900 dark:text-zinc-100">
+                        Zoom Level
+                      </span>
+                      <span className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400">
+                        {zoomPercent}%
+                      </span>
+                    </div>
+
+                    {/* Interactive Slider */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-zinc-400 font-mono">25%</span>
+                      <input
+                        type="range"
+                        min={25}
+                        max={200}
+                        step={5}
+                        value={zoomPercent}
+                        onChange={(e) => setZoomPercent(Number(e.target.value))}
+                        className="flex-1 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                      <span className="text-[10px] text-zinc-400 font-mono">200%</span>
+                    </div>
+
+                    {/* Preset Buttons */}
+                    <div className="grid grid-cols-3 gap-1 pt-1">
+                      {[
+                        { label: '50%', value: 50 },
+                        { label: '75%', value: 75 },
+                        { label: '100%', value: 100 },
+                        { label: '125%', value: 125 },
+                        { label: '150%', value: 150 },
+                        { label: 'Fit', value: 75 }
+                      ].map((preset) => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => {
+                            setZoomPercent(preset.value);
+                            setShowZoomMenu(false);
+                          }}
+                          className={`py-1 px-1.5 rounded text-[11px] font-medium transition-colors cursor-pointer text-center ${
+                            zoomPercent === preset.value
+                              ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-semibold'
+                              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="text-[10px] text-zinc-400 dark:text-zinc-500 pt-1 border-t border-zinc-100 dark:border-zinc-800 text-center">
+                      Tip: Drag badge up/down or use Cmd + / -
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {currentStep.type === 'text_only' && (
+            <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 p-0.5 rounded">
+              <button
+                onClick={() => setActiveTab('preview')}
+                className={`px-2.5 py-0.5 rounded text-[11px] font-medium transition-all ${
+                  activeTab === 'preview'
+                    ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                }`}
+              >
+                Preview
+              </button>
+              <button
+                onClick={() => setActiveTab('edit')}
+                className={`px-2.5 py-0.5 rounded text-[11px] font-medium transition-all ${
+                  activeTab === 'edit'
+                    ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                }`}
+              >
+                Markdown Edit
+              </button>
+            </div>
+          )}
+
+          {!rightOpen && onOpenRight && (
+            <>
+              <div className="h-3.5 w-px bg-zinc-200 dark:bg-zinc-800 mx-0.5" />
+              <button
+                onClick={onOpenRight}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer ml-0.5"
+                title="Expand Step Inspector (Cmd+I)"
+              >
+                <PanelRightOpen className="w-4 h-4" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Main Viewport Content Canvas */}
+      <div ref={viewportScrollRef} className="flex-1 overflow-auto p-4 md:p-6 flex flex-col items-center">
+        {currentStep.type === 'screenshot' ? (
+          <div className="max-w-full flex flex-col items-center w-full">
+            {/* If screenshot exists */}
+            {currentStep.image?.originalImagePath ? (
+              <div className="flex flex-col items-center w-full">
+                {/* Floating Minimalist Annotation Toolbar */}
+                <div className="sticky top-0 z-20 mb-4 flex justify-center">
+                  <AnnotationToolbar
+                    activeTool={activeTool}
+                    onSelectTool={setActiveTool}
+                    currentColor={currentColor}
+                    onColorChange={setCurrentColor}
+                    currentStrokeWidth={currentStrokeWidth}
+                    onStrokeWidthChange={setCurrentStrokeWidth}
+                    textSettings={textSettings}
+                    onTextSettingsChange={handleTextSettingsChange}
+                    loupeSettings={loupeSettings}
+                    onLoupeSettingsChange={handleLoupeSettingsChange}
+                    canUndo={canUndo}
+                    canRedo={canRedo}
+                    onUndo={handleUndo}
+                    onRedo={handleRedo}
+                    hasSelection={!!selectedAnnotationId}
+                    onDeleteSelected={handleDeleteSelected}
+                    onClearAll={handleClearAll}
+                    nextBadgeNumber={nextBadgeNumber}
+                  />
+                </div>
+
+                {/* Beautify Canvas Outer Frame */}
+                <div
+                  className={`transition-all duration-200 select-none ${
+                    beautify.enabled ? 'rounded-xl transition-shadow' : ''
+                  }`}
+                  style={{
+                    padding: beautify.enabled ? `${beautify.padding}px` : '0px',
+                    backgroundColor: beautify.enabled ? beautify.backgroundColor : 'transparent',
+                    backgroundImage:
+                      beautify.enabled && beautify.backgroundType === 'gradient'
+                        ? 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'
+                        : undefined
+                  }}
+                >
+                  {/* Image Card Container with Konva Canvas */}
+                  <div
+                    className="relative overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-center transition-all duration-100"
+                    style={{
+                      borderRadius: beautify.enabled ? `${beautify.borderRadius}px` : '4px',
+                      boxShadow: beautify.enabled
+                        ? `0 ${beautify.shadowBlur / 2}px ${beautify.shadowBlur}px rgba(0, 0, 0, 0.12)`
+                        : 'none'
+                    }}
+                  >
+                    <KonvaCanvas
+                      ref={canvasRef}
+                      imageSrc={currentStep.image.originalImagePath}
+                      annotations={annotations}
+                      onChangeAnnotations={handleAnnotationsChange}
+                      activeTool={activeTool}
+                      currentColor={currentColor}
+                      currentStrokeWidth={currentStrokeWidth}
+                      textSettings={textSettings}
+                      loupeSettings={loupeSettings}
+                      onToolUsed={(tool) => {
+                        // Keep in badge mode for rapid consecutive numbering; switch for others
+                        if (tool !== 'badge') {
+                          setActiveTool('select');
+                        }
+                      }}
+                      onImageCropped={handleImageCropped}
+                      selectedId={selectedAnnotationId}
+                      onSelectId={setSelectedAnnotationId}
+                      zoomPercent={zoomPercent}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Empty Screenshot Placeholder */
+              <div className="w-[640px] h-[360px] border-2 border-dashed border-zinc-300 dark:border-zinc-800 rounded-lg flex flex-col items-center justify-center p-6 bg-white/60 dark:bg-zinc-900/60 text-center my-8">
+                <Camera className="w-8 h-8 text-zinc-400 mb-2" />
+                <h4 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  No screenshot captured for this step
+                </h4>
+                <p className="text-[11px] text-zinc-400 max-w-xs mt-1 mb-4">
+                  Capture a fullscreen screenshot or select a specific area, or upload an image file from your computer.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (onTriggerCapture) onTriggerCapture('fullscreen');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-medium hover:bg-zinc-800 transition-colors cursor-pointer"
+                    title="Capture full screen (Cmd+Shift+S)"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>Capture Screen</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (onTriggerCapture) onTriggerCapture('selection');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-amber-500/40 hover:border-amber-500/80 bg-amber-500/10 text-amber-500 dark:text-amber-400 text-xs font-medium transition-colors cursor-pointer"
+                    title="Capture selected area (Cmd+Shift+A)"
+                  >
+                    <Crop className="w-3.5 h-3.5" />
+                    <span>Capture Selection</span>
+                  </button>
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-medium transition-colors cursor-pointer">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload Image</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadImage}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* In-viewport Callout Preview */}
+            {currentStep.callout && currentStep.callout.text && (
+              <div
+                className={`mt-4 w-full max-w-[820px] p-3 rounded-md border flex items-start gap-2.5 text-xs ${getCalloutStyles(
+                  currentStep.callout.type
+                )}`}
+              >
+                {getCalloutIcon(currentStep.callout.type)}
+                <div className="flex-1">
+                  <span className="font-semibold capitalize mr-1">
+                    {currentStep.callout.type}:
+                  </span>
+                  <span>{currentStep.callout.text}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Text Step View */
+          <div className="max-w-2xl w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-sm p-6 overflow-hidden flex flex-col min-h-[420px] my-4">
+            {activeTab === 'edit' ? (
+              <div className="flex-1 flex flex-col space-y-4">
+                <div>
+                  <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-wider mb-1">
+                    Step Title
+                  </label>
+                  <input
+                    type="text"
+                    value={currentStep.title}
+                    onChange={(e) => updateStep(currentStep.id, { title: e.target.value })}
+                    className="w-full text-base font-semibold px-3 py-2 rounded-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                    placeholder="e.g. Critical Safety Procedures"
+                  />
+                </div>
+
+                <div className="flex-1 flex flex-col">
+                  <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-wider mb-1">
+                    Markdown Instructions &amp; Documentation
+                  </label>
+                  <textarea
+                    value={currentStep.description}
+                    onChange={(e) =>
+                      updateStep(currentStep.id, { description: e.target.value })
+                    }
+                    placeholder="Write detailed instructions using standard Markdown (# headers, - lists, > blockquotes)..."
+                    className="w-full flex-1 min-h-[260px] p-3 text-xs font-mono rounded-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-none leading-relaxed"
+                  />
+                </div>
+              </div>
+            ) : (
+              /* Preview Mode */
+              <div className="flex-1 flex flex-col">
+                <div className="border-b border-zinc-100 dark:border-zinc-800 pb-3 mb-4">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-medium">
+                    STEP {currentStep.order}
+                  </span>
+                  <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mt-2">
+                    {currentStep.title}
+                  </h2>
+                </div>
+
+                <div className="flex-1 prose dark:prose-invert max-w-none">
+                  {renderSimpleMarkdown(currentStep.description || '*No instructions provided yet.*')}
+                </div>
+
+                {currentStep.callout && currentStep.callout.text && (
+                  <div
+                    className={`mt-4 p-3 rounded-md border flex items-start gap-2.5 text-xs ${getCalloutStyles(
+                      currentStep.callout.type
+                    )}`}
+                  >
+                    {getCalloutIcon(currentStep.callout.type)}
+                    <div className="flex-1">
+                      <span className="font-semibold capitalize mr-1">
+                        {currentStep.callout.type}:
+                      </span>
+                      <span>{currentStep.callout.text}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
