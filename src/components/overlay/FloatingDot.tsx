@@ -64,6 +64,8 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
   const currentStep = activeProject?.steps.find((s) => s.id === activeStepId);
   const retakeStep = activeProject?.steps.find((s) => s.id === retakeStepId);
   const isRetakeMode = Boolean(retakeStepId && retakeStep);
+  const isMac = typeof window !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || window.navigator.userAgent);
+  const cmdLabel = isMac ? 'Cmd' : 'Ctrl';
 
   // Update overlay window size via Electron IPC
   const notifyElectronSize = (mode: DotState) => {
@@ -266,7 +268,7 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
           >
             <span className="relative flex h-2.5 w-2.5">
               <span
-                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                className={`absolute inline-flex h-full w-full rounded-full opacity-35 ${
                   isRetakeMode ? 'bg-amber-400' : 'bg-blue-400'
                 }`}
               />
@@ -299,8 +301,8 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
               }`}
               title={
                 isRetakeMode && retakeStep
-                  ? `Retake full screen for Step ${retakeStep.order} (Cmd+Shift+S)`
-                  : 'Full screen capture (Cmd+Shift+S)'
+                  ? `Retake full screen for Step ${retakeStep.order} (${cmdLabel}+Shift+S)`
+                  : `Full screen capture (${cmdLabel}+Shift+S)`
               }
             >
               <Camera className="w-3.5 h-3.5" />
@@ -311,8 +313,8 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
               className="p-1 rounded-full hover:bg-zinc-800 active:bg-zinc-700 text-amber-400 hover:text-white transition-colors cursor-pointer"
               title={
                 isRetakeMode && retakeStep
-                  ? `Retake selected area for Step ${retakeStep.order} (Cmd+Shift+A)`
-                  : 'Capture selected area (Cmd+Shift+A)'
+                  ? `Retake selected area for Step ${retakeStep.order} (${cmdLabel}+Shift+A)`
+                  : `Capture selected area (${cmdLabel}+Shift+A)`
               }
             >
               <Crop className="w-3.5 h-3.5" />

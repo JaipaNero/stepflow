@@ -10,6 +10,7 @@ import {
   net,
   systemPreferences,
   shell,
+  nativeImage,
 } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -178,6 +179,193 @@ function setupProjectsFileWatcher(): void {
 async function ensureDirectories(): Promise<void> {
   await fs.promises.mkdir(getAssetsDir(), { recursive: true });
   await fs.promises.mkdir(getProjectsDir(), { recursive: true });
+}
+
+interface SelectionRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function requestSelectionRect(display: Electron.Display): Promise<SelectionRect | null> {
+  return new Promise((resolve) => {
+    const requestId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const submitChannel = `selection-rect-submit-${requestId}`;
+    const cancelChannel = `selection-rect-cancel-${requestId}`;
+
+    let resolved = false;
+    const finish = (value: SelectionRect | null) => {
+      if (resolved) return;
+      resolved = true;
+      ipcMain.removeAllListeners(submitChannel);
+      ipcMain.removeAllListeners(cancelChannel);
+      resolve(value);
+    };
+
+    const selectorWindow = new BrowserWindow({
+      x: display.bounds.x,
+      y: display.bounds.y,
+      width: display.bounds.width,
+      height: display.bounds.height,
+      frame: false,
+      transparent: true,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      movable: false,
+      resizable: false,
+      focusable: true,
+      show: false,
+      backgroundColor: '#00000001',
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        sandbox: false,
+      },
+    });
+
+    const cleanupAndClose = () => {
+      try {
+        if (!selectorWindow.isDestroyed()) {
+          selectorWindow.close();
+        }
+      } catch {}
+    };
+
+    ipcMain.once(submitChannel, (_event, rect: SelectionRect) => {
+      finish(rect);
+      cleanupAndClose();
+    });
+
+    ipcMain.once(cancelChannel, () => {
+      finish(null);
+      cleanupAndClose();
+    });
+
+    selectorWindow.on('closed', () => {
+      finish(null);
+    });
+
+    const html = `
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        cursor: crosshair;
+        background: rgba(15, 23, 42, 0.2);
+        user-select: none;
+      }
+      #hint {
+        position: fixed;
+        top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(15, 23, 42, 0.88);
+        color: #e2e8f0;
+        font-family: Segoe UI, Arial, sans-serif;
+        font-size: 12px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        pointer-events: none;
+      }
+      #selection {
+        position: fixed;
+        border: 2px solid #38bdf8;
+        background: rgba(56, 189, 248, 0.12);
+        display: none;
+        box-shadow: 0 0 0 99999px rgba(2, 6, 23, 0.4);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hint">Drag to capture a region. Press Esc to cancel.</div>
+    <div id="selection"></div>
+    <script>
+      const { ipcRenderer } = require('electron');
+      const submitChannel = ${JSON.stringify(submitChannel)};
+      const cancelChannel = ${JSON.stringify(cancelChannel)};
+      const selectionEl = document.getElementById('selection');
+      let dragging = false;
+      let startX = 0;
+      let startY = 0;
+      let currentX = 0;
+      let currentY = 0;
+
+      function rectFromPoints() {
+        const left = Math.min(startX, currentX);
+        const top = Math.min(startY, currentY);
+        const width = Math.abs(currentX - startX);
+        const height = Math.abs(currentY - startY);
+        return { x: left, y: top, width, height };
+      }
+
+      function renderRect() {
+        const r = rectFromPoints();
+        selectionEl.style.display = 'block';
+        selectionEl.style.left = r.x + 'px';
+        selectionEl.style.top = r.y + 'px';
+        selectionEl.style.width = r.width + 'px';
+        selectionEl.style.height = r.height + 'px';
+      }
+
+      window.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        dragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        currentX = e.clientX;
+        currentY = e.clientY;
+        renderRect();
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        currentX = e.clientX;
+        currentY = e.clientY;
+        renderRect();
+      });
+
+      window.addEventListener('mouseup', (e) => {
+        if (!dragging) return;
+        dragging = false;
+        currentX = e.clientX;
+        currentY = e.clientY;
+        const rect = rectFromPoints();
+        if (rect.width < 4 || rect.height < 4) {
+          ipcRenderer.send(cancelChannel);
+          return;
+        }
+        ipcRenderer.send(submitChannel, rect);
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          ipcRenderer.send(cancelChannel);
+        }
+      });
+
+      window.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        ipcRenderer.send(cancelChannel);
+      });
+    </script>
+  </body>
+</html>
+`;
+
+    selectorWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    selectorWindow.once('ready-to-show', () => {
+      selectorWindow.show();
+      selectorWindow.focus();
+    });
+  });
 }
 
 function loadRoute(win: BrowserWindow, route: string): void {
@@ -453,6 +641,47 @@ async function performCapture(isRetake = false, mode: 'fullscreen' | 'selection'
     }
 
     let captureSuccess = false;
+    const cursorPoint = screen.getCursorScreenPoint();
+    const activeDisplay = screen.getDisplayNearestPoint(cursorPoint);
+    const scaleFactor = activeDisplay.scaleFactor || 1;
+    let selectedRectDip: SelectionRect | null = null;
+
+    appendRuntimeLog(
+      `[Capture] start mode=${mode} isRetake=${String(Boolean(isRetake || currentRetakeStepId))} displayId=${activeDisplay.id} cursor=(${cursorPoint.x},${cursorPoint.y}) displayBounds=(${activeDisplay.bounds.x},${activeDisplay.bounds.y},${activeDisplay.bounds.width}x${activeDisplay.bounds.height}) scale=${scaleFactor}`
+    );
+
+    if (mode === 'selection' && process.platform !== 'darwin') {
+      selectedRectDip = await requestSelectionRect(activeDisplay);
+      if (!selectedRectDip) {
+        appendRuntimeLog('[Capture] selection cancelled before screenshot');
+        if (isRetake || currentRetakeStepId) {
+          if (overlayWindow && !overlayWindow.isDestroyed()) {
+            overlayWindow.hide();
+          }
+          if (studioWindow && !studioWindow.isDestroyed()) {
+            if (studioWindow.isMinimized()) studioWindow.restore();
+            studioWindow.show();
+            studioWindow.focus();
+            studioWindow.webContents.send('studio-restored');
+          }
+          currentRetakeStepId = null;
+        } else {
+          if (overlayWasVisible && overlayWindow && !overlayWindow.isDestroyed()) {
+            overlayWindow.showInactive();
+          }
+          if (studioWasVisible && studioWindow && !studioWindow.isDestroyed()) {
+            if (studioWindow.isMinimized()) studioWindow.restore();
+            studioWindow.show();
+            studioWindow.focus();
+          }
+        }
+        return null;
+      }
+
+      appendRuntimeLog(
+        `[Capture] selection rect dip=(${selectedRectDip.x},${selectedRectDip.y},${selectedRectDip.width}x${selectedRectDip.height})`
+      );
+    }
 
     // Strategy 1 (macOS): Native screencapture CLI
     if (process.platform === 'darwin') {
@@ -506,11 +735,12 @@ async function performCapture(isRetake = false, mode: 'fullscreen' | 'selection'
     // Strategy 2: Electron desktopCapturer (for Windows, Linux, or macOS fallback)
     if (!captureSuccess) {
       try {
-        const cursorPoint = screen.getCursorScreenPoint();
-        const activeDisplay = screen.getDisplayNearestPoint(cursorPoint);
-        const scaleFactor = activeDisplay.scaleFactor || 1;
         const captureWidth = Math.round(activeDisplay.size.width * scaleFactor);
         const captureHeight = Math.round(activeDisplay.size.height * scaleFactor);
+
+        appendRuntimeLog(
+          `[Capture] desktopCapturer requested size=${captureWidth}x${captureHeight} mode=${mode}`
+        );
 
         const sources = await desktopCapturer.getSources({
           types: ['screen'],
@@ -530,14 +760,42 @@ async function performCapture(isRetake = false, mode: 'fullscreen' | 'selection'
             targetSource = sources[0];
           }
 
-          const imgBuffer = targetSource.thumbnail.toPNG();
+          let imgBuffer = targetSource.thumbnail.toPNG();
           if (imgBuffer && imgBuffer.length > 0) {
+            if (mode === 'selection' && selectedRectDip) {
+              const image = nativeImage.createFromBuffer(imgBuffer);
+              const imageSize = image.getSize();
+              const cropX = Math.max(0, Math.floor(selectedRectDip.x * scaleFactor));
+              const cropY = Math.max(0, Math.floor(selectedRectDip.y * scaleFactor));
+              const cropWidth = Math.min(
+                imageSize.width - cropX,
+                Math.max(1, Math.floor(selectedRectDip.width * scaleFactor))
+              );
+              const cropHeight = Math.min(
+                imageSize.height - cropY,
+                Math.max(1, Math.floor(selectedRectDip.height * scaleFactor))
+              );
+
+              if (cropWidth > 1 && cropHeight > 1) {
+                appendRuntimeLog(
+                  `[Capture] crop applied px=(${cropX},${cropY},${cropWidth}x${cropHeight}) source=${imageSize.width}x${imageSize.height}`
+                );
+                imgBuffer = image.crop({ x: cropX, y: cropY, width: cropWidth, height: cropHeight }).toPNG();
+              } else {
+                appendRuntimeLog(
+                  `[Capture] crop skipped due to tiny region px=(${cropX},${cropY},${cropWidth}x${cropHeight})`
+                );
+              }
+            }
+
             await fs.promises.writeFile(filePath, imgBuffer);
             captureSuccess = true;
+            appendRuntimeLog(`[Capture] saved file=${filePath}`);
           }
         }
       } catch (capturerErr) {
         console.warn('[Capture] desktopCapturer failed:', capturerErr);
+        appendRuntimeLog('[Capture] desktopCapturer failed', capturerErr);
       }
     }
 
@@ -644,6 +902,7 @@ async function performCapture(isRetake = false, mode: 'fullscreen' | 'selection'
     return capturePayload;
   } catch (error) {
     console.error('[Capture] Exception during screen capture:', error);
+    appendRuntimeLog('[Capture] exception', error);
     if (isRetake || currentRetakeStepId) {
       if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.hide();

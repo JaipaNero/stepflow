@@ -39,6 +39,8 @@ export const StepInspector: React.FC<StepInspectorProps> = ({
   } = useSopStore();
 
   const [showBeautifySettings, setShowBeautifySettings] = useState(false);
+  const isMac = typeof window !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || window.navigator.userAgent);
+  const cmdLabel = isMac ? 'Cmd' : 'Ctrl';
 
   if (!activeProject) return null;
 
@@ -460,7 +462,7 @@ export const StepInspector: React.FC<StepInspectorProps> = ({
                   type="button"
                   onClick={(e) => handleStartRetake('fullscreen', e)}
                   className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 dark:text-amber-400 font-semibold transition-colors cursor-pointer text-xs shadow-xs"
-                  title="Minimizes to floating pill so you can see your screen to retake full screen (Cmd+Shift+S)"
+                  title={`Minimizes to floating pill so you can see your screen to retake full screen (${cmdLabel}+Shift+S)`}
                 >
                   <Camera className="w-4 h-4" />
                   <span>Retake Full Screen</span>
@@ -469,7 +471,7 @@ export const StepInspector: React.FC<StepInspectorProps> = ({
                   type="button"
                   onClick={(e) => handleStartRetake('selection', e)}
                   className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 dark:text-amber-400 font-semibold transition-colors cursor-pointer text-xs shadow-xs"
-                  title="Select a rectangular area of your screen to retake (Cmd+Shift+A)"
+                  title={`Select a rectangular area of your screen to retake (${cmdLabel}+Shift+A)`}
                 >
                   <Crop className="w-4 h-4" />
                   <span>Retake Selection</span>
