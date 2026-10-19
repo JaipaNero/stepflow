@@ -447,8 +447,18 @@ export async function renderAnnotatedImage(image?: StepImageData): Promise<strin
   try {
     const img = await loadImage(image.originalImagePath);
     const canvas = document.createElement('canvas');
-    const width = image.dimensions?.width || img.naturalWidth || 960;
-    const height = image.dimensions?.height || img.naturalHeight || 540;
+    const naturalWidth = img.naturalWidth || image.dimensions?.width || 960;
+    const naturalHeight = img.naturalHeight || image.dimensions?.height || 540;
+    const storedWidth = image.dimensions?.width || naturalWidth;
+    const storedHeight = image.dimensions?.height || naturalHeight;
+
+    // Older projects may keep stale default dimensions (e.g. 1280x720).
+    // Prefer native image dimensions for export compositing if dimensions disagree.
+    const hasStaleDimensions =
+      Math.abs(storedWidth - naturalWidth) > 2 || Math.abs(storedHeight - naturalHeight) > 2;
+
+    const width = naturalWidth;
+    const height = naturalHeight;
 
     canvas.width = width;
     canvas.height = height;
@@ -465,8 +475,8 @@ export async function renderAnnotatedImage(image?: StepImageData): Promise<strin
       return canvas.toDataURL('image/png');
     }
 
-    const nativeW = image.dimensions?.width || width;
-    const nativeH = image.dimensions?.height || height;
+    const nativeW = hasStaleDimensions ? naturalWidth : storedWidth;
+    const nativeH = hasStaleDimensions ? naturalHeight : storedHeight;
     const scaleX = width / nativeW;
     const scaleY = height / nativeH;
 
@@ -502,16 +512,37 @@ export async function prepareExportProject(project: SopProject): Promise<SopProj
       if (step.type === 'screenshot' && step.image?.originalImagePath) {
         try {
           const rendered = await renderAnnotatedImage(step.image);
+          let normalizedDimensions = step.image.dimensions;
+
+          try {
+            const dimProbe = await loadImage(rendered || step.image.originalImagePath);
+            normalizedDimensions = {
+              width: dimProbe.naturalWidth || normalizedDimensions.width,
+              height: dimProbe.naturalHeight || normalizedDimensions.height,
+            };
+          } catch {
+            // Keep existing dimensions if probing fails.
+          }
+
           if (rendered && rendered.startsWith('data:image/') && rendered.includes(';base64,')) {
             return {
               ...step,
               image: {
                 ...step.image,
                 originalImagePath: rendered,
+                dimensions: normalizedDimensions,
                 annotatedCachePath: rendered,
               },
             };
           }
+
+          return {
+            ...step,
+            image: {
+              ...step.image,
+              dimensions: normalizedDimensions,
+            },
+          };
         } catch (err) {
           console.warn('[prepareExportProject] Error rendering step image:', err);
         }
