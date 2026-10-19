@@ -22,6 +22,7 @@ import {
   HardDrive,
   AlertTriangle,
   PanelLeft,
+  Minimize2,
 } from 'lucide-react';
 import { useSopStore } from '../../store/useSopStore';
 import { SopProject, ErrorFaqItem } from '../../types/sop';
@@ -185,6 +186,20 @@ export const ProjectLibrary: React.FC = () => {
     await window.electronAPI.openWorkspaceFolder();
   };
 
+  const handleMinimizeToPill = (e?: React.MouseEvent) => {
+    let anchor: { x: number; y: number } | undefined;
+    if (e && e.currentTarget) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      anchor = {
+        x: Math.round(window.screenX + rect.left + rect.width / 2),
+        y: Math.round(window.screenY + rect.top + rect.height / 2),
+      };
+    }
+    if (typeof window !== 'undefined' && window.electronAPI?.minimizeToOverlay) {
+      window.electronAPI.minimizeToOverlay(anchor);
+    }
+  };
+
   // Dismiss dropdown menu on scroll or window resize
   useEffect(() => {
     const handleDismiss = () => {
@@ -336,6 +351,16 @@ export const ProjectLibrary: React.FC = () => {
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New</span>
+          </button>
+
+          {/* Minimize to Floating Pill Button */}
+          <button
+            type="button"
+            onClick={handleMinimizeToPill}
+            className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 border border-zinc-200 dark:border-zinc-700 transition-colors cursor-pointer"
+            title="Minimize to Floating Pill (Error FAQ & OCR Standby)"
+          >
+            <Minimize2 className="w-4 h-4" />
           </button>
 
           {/* Menu Dropdown for Tools & Workspace */}

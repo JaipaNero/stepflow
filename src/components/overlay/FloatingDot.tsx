@@ -472,18 +472,22 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                 title={
                   isRetakeMode && retakeStep
                     ? `Retaking Step ${retakeStep.order} • Click to cancel & return to Studio`
-                    : 'Step count • Click to open Studio'
+                    : activeProject
+                    ? `Step ${stepCount} • Click to open Studio`
+                    : 'Error & FAQ Standby • Drop screenshot or click to restore StepFlow'
                 }
               >
                 <span className="relative flex h-2.5 w-2.5">
                   <span
                     className={`absolute inline-flex h-full w-full rounded-full opacity-35 ${
-                      isRetakeMode ? 'bg-amber-400' : 'bg-blue-400'
+                      isRetakeMode ? 'bg-amber-400' : !activeProject ? 'bg-amber-400' : 'bg-blue-400'
                     }`}
                   />
                   <span
                     className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
                       isRetakeMode
+                        ? 'bg-amber-500 shadow-[0_0_6px_#f59e0b]'
+                        : !activeProject
                         ? 'bg-amber-500 shadow-[0_0_6px_#f59e0b]'
                         : 'bg-blue-500 shadow-[0_0_6px_#3b82f6]'
                     }`}
@@ -491,10 +495,10 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                 </span>
                 <span
                   className={`font-mono text-xs font-bold tracking-tight ${
-                    isRetakeMode ? 'text-amber-300' : 'text-white'
+                    isRetakeMode || !activeProject ? 'text-amber-300' : 'text-white'
                   }`}
                 >
-                  {isRetakeMode && retakeStep ? `Retake #${retakeStep.order}` : stepCount}
+                  {isRetakeMode && retakeStep ? `Retake #${retakeStep.order}` : activeProject ? stepCount : 'FAQ'}
                 </span>
               </div>
 
@@ -556,12 +560,12 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                   </span>
                 </button>
 
-                {/* Expand to Studio */}
+                {/* Expand to Studio or Library */}
                 <button
                   type="button"
                   onClick={handleRestoreStudio}
                   className="p-1 rounded-full hover:bg-zinc-800 active:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer ml-0.5"
-                  title={isRetakeMode ? 'Cancel retake & return to Studio' : 'Expand & Open Studio'}
+                  title={isRetakeMode ? 'Cancel retake & return to Studio' : activeProject ? 'Expand & Open Studio' : 'Restore StepFlow'}
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
                 </button>
