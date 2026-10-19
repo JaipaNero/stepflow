@@ -507,7 +507,7 @@ function createOverlayWindow(): BrowserWindow {
   const enableRendererSandbox = process.platform !== 'win32';
 
   overlayWindow = new BrowserWindow({
-    width: 204,
+    width: 340,
     height: 76,
     frame: false,
     transparent: true,
@@ -553,7 +553,7 @@ function setOverlayMode(mode: 'collapsed' | 'expanded' | 'preview'): void {
   if (!overlayWindow || overlayWindow.isDestroyed()) return;
 
   const modeSizes: Record<'collapsed' | 'expanded' | 'preview', { width: number; height: number }> = {
-    collapsed: { width: 204, height: 76 },
+    collapsed: { width: 340, height: 76 },
     expanded: { width: 380, height: 280 },
     preview: { width: 340, height: 180 },
   };
@@ -931,11 +931,11 @@ async function performCapture(isRetake = false, mode: 'fullscreen' | 'selection'
 }
 
 function registerGlobalShortcuts(): void {
-  // Full screen capture shortcut: Cmd/Ctrl+Alt+S (avoids OS-wide "Save As" conflict)
-  const fullShortcut = 'CommandOrControl+Alt+S';
+  // Full screen capture shortcut: Cmd/Ctrl+Shift+S
+  const fullShortcut = 'CommandOrControl+Shift+S';
   const success = globalShortcut.register(fullShortcut, async () => {
     try {
-      await performCapture(false, 'fullscreen');
+      await performCapture(Boolean(currentRetakeStepId), 'fullscreen');
     } catch (err) {
       console.error('[Shortcut] Error in full screen shortcut capture:', err);
     }
@@ -945,11 +945,11 @@ function registerGlobalShortcuts(): void {
     console.warn(`[Shortcut] Registration failed for ${fullShortcut}`);
   }
 
-  // Area / Selection capture shortcut: Cmd/Ctrl+Alt+A
-  const selectionShortcut = 'CommandOrControl+Alt+A';
+  // Area / Selection capture shortcut: Cmd/Ctrl+Shift+A
+  const selectionShortcut = 'CommandOrControl+Shift+A';
   const selSuccess = globalShortcut.register(selectionShortcut, async () => {
     try {
-      await performCapture(false, 'selection');
+      await performCapture(Boolean(currentRetakeStepId), 'selection');
     } catch (err) {
       console.error('[Shortcut] Error in selection shortcut capture:', err);
     }

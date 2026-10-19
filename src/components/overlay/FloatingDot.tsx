@@ -291,13 +291,15 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
 
           <div className="h-3.5 w-px bg-zinc-700/80 mx-0.5" />
 
-          {/* Quick Action Buttons */}
-          <div className="titlebar-no-drag flex items-center gap-1">
+          {/* Quick Action Buttons with Visible Shortcut Keycaps */}
+          <div className="titlebar-no-drag flex items-center gap-1.5">
             <button
               type="button"
               onClick={handleSnapFullScreen}
-              className={`p-1 rounded-full hover:bg-zinc-800 active:bg-zinc-700 transition-colors cursor-pointer ${
-                isRetakeMode ? 'text-amber-300 hover:text-white' : 'text-blue-400 hover:text-white'
+              className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                isRetakeMode
+                  ? 'bg-amber-950/60 border border-amber-500/50 hover:bg-amber-900/60 text-amber-300'
+                  : 'bg-zinc-900/90 border border-zinc-800 hover:border-blue-500/50 hover:bg-zinc-800 text-blue-400'
               }`}
               title={
                 isRetakeMode && retakeStep
@@ -305,24 +307,32 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
                   : `Full screen capture (${cmdLabel}+Shift+S)`
               }
             >
-              <Camera className="w-3.5 h-3.5" />
+              <Camera className="w-3.5 h-3.5 shrink-0" />
+              <span className="font-mono text-[10px] font-semibold text-zinc-300 tracking-tight">
+                <span className="text-zinc-500 font-sans">{cmdLabel}+</span>Shift+S
+              </span>
             </button>
+
             <button
               type="button"
               onClick={handleSnapSelection}
-              className="p-1 rounded-full hover:bg-zinc-800 active:bg-zinc-700 text-amber-400 hover:text-white transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-zinc-900/90 border border-zinc-800 hover:border-amber-500/50 hover:bg-zinc-800 text-amber-400 transition-all cursor-pointer text-xs font-medium"
               title={
                 isRetakeMode && retakeStep
                   ? `Retake selected area for Step ${retakeStep.order} (${cmdLabel}+Shift+A)`
                   : `Capture selected area (${cmdLabel}+Shift+A)`
               }
             >
-              <Crop className="w-3.5 h-3.5" />
+              <Crop className="w-3.5 h-3.5 shrink-0" />
+              <span className="font-mono text-[10px] font-semibold text-zinc-300 tracking-tight">
+                <span className="text-zinc-500 font-sans">{cmdLabel}+</span>Shift+A
+              </span>
             </button>
+
             <button
               type="button"
               onClick={handleRestoreStudio}
-              className="p-1 rounded-full hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+              className="p-1 rounded-full hover:bg-zinc-800 active:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer ml-0.5"
               title={isRetakeMode ? 'Cancel retake & return to Studio' : 'Expand & Open Studio'}
             >
               <Maximize2 className="w-3.5 h-3.5" />
