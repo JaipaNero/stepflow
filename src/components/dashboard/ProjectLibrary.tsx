@@ -19,10 +19,14 @@ import {
   UploadCloud,
   Package,
   ExternalLink,
-  HardDrive
+  HardDrive,
+  AlertTriangle,
 } from 'lucide-react';
 import { useSopStore } from '../../store/useSopStore';
-import { SopProject } from '../../types/sop';
+import { SopProject, ErrorFaqItem } from '../../types/sop';
+import { ErrorKnowledgeBaseView } from '../faq/ErrorKnowledgeBaseView';
+import { ErrorSearchModal } from '../faq/ErrorSearchModal';
+import { ErrorFaqEditorModal } from '../faq/ErrorFaqEditorModal';
 
 export const ProjectLibrary: React.FC = () => {
   const {
@@ -32,8 +36,15 @@ export const ProjectLibrary: React.FC = () => {
     deleteProject,
     duplicateProject,
     updateProjectById,
-    loadProjects
+    loadProjects,
+    errorFaqItems,
+    loadErrorFaq,
   } = useSopStore();
+
+  const [libraryTab, setLibraryTab] = useState<'sop' | 'error_faq'>('sop');
+  const [showSearchHud, setShowSearchHud] = useState(false);
+  const [editorItem, setEditorItem] = useState<ErrorFaqItem | null>(null);
+  const [showEditorModal, setShowEditorModal] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewModal, setShowNewModal] = useState(false);
@@ -81,6 +92,17 @@ export const ProjectLibrary: React.FC = () => {
   useEffect(() => {
     if (typeof window !== 'undefined' && window.electronAPI?.getWorkspacePath) {
       window.electronAPI.getWorkspacePath().then(setWorkspaceInfo).catch(console.error);
+    }
+    loadErrorFaq();
+  }, [loadErrorFaq]);
+
+  // Global search HUD shortcut listener (Ctrl+Shift+F)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.electronAPI?.onOpenSearchHud) {
+      const unsub = window.electronAPI.onOpenSearchHud(() => {
+        setShowSearchHud(true);
+      });
+      return unsub;
     }
   }, []);
 
@@ -239,60 +261,122 @@ export const ProjectLibrary: React.FC = () => {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col font-sans">
       {/* Top Navigation Bar */}
       <header className="titlebar-drag h-14 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 pl-20 pr-6 flex items-center justify-between select-none">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-zinc-900 dark:bg-white flex items-center justify-center text-white dark:text-zinc-950 font-bold text-sm shadow-sm">
-            SF
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-zinc-900 dark:bg-white flex items-center justify-center text-white dark:text-zinc-950 font-bold text-sm shadow-sm">
+              SF
+            </div>
+            <div>
+              <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 leading-none">
+                StepFlow
+              </h1>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                SOP &amp; Workflow Documentation
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 leading-none">
-              StepFlow
-            </h1>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-              SOP &amp; Workflow Documentation
-            </p>
+
+          {/* Module Tab Switcher */}
+          <div className="titlebar-no-drag flex items-center bg-zinc-100 dark:bg-zinc-800 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <button
+              type="button"
+              onClick={() => setLibraryTab('sop')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                libraryTab === 'sop'
+                  ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>SOP Procedures</span>
+              <span className="text-[10px] opacity-75 font-mono">({projects.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setLibraryTab('error_faq')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                libraryTab === 'error_faq'
+                  ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+              <span>Error &amp; FAQ Base</span>
+              <span className="text-[10px] opacity-75 font-mono">({errorFaqItems.length})</span>
+            </button>
           </div>
         </div>
 
         <div className="titlebar-no-drag flex items-center gap-2.5">
-          <button
-            onClick={() => setShowWorkspaceModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 text-xs font-medium transition-colors shadow-xs cursor-pointer"
-            title="Configure Workspace Folder (Google Drive, OneDrive, Dropbox, or Local Storage)"
-          >
-            <FolderSync className={`w-3.5 h-3.5 ${workspaceInfo?.isCustom ? 'text-emerald-500' : 'text-zinc-400'}`} />
-            <span>{workspaceInfo?.isCustom ? 'Shared Workspace' : 'Workspace'}</span>
-          </button>
+          {libraryTab === 'sop' ? (
+            <>
+              <button
+                onClick={() => setShowWorkspaceModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 text-xs font-medium transition-colors shadow-xs cursor-pointer"
+                title="Configure Workspace Folder (Google Drive, OneDrive, Dropbox, or Local Storage)"
+              >
+                <FolderSync className={`w-3.5 h-3.5 ${workspaceInfo?.isCustom ? 'text-emerald-500' : 'text-zinc-400'}`} />
+                <span>{workspaceInfo?.isCustom ? 'Shared Workspace' : 'Workspace'}</span>
+              </button>
 
-          <button
-            onClick={handleImportBundle}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 text-xs font-medium transition-colors shadow-xs cursor-pointer"
-            title="Import an SOP Procedure Bundle (.stepflow or .zip)"
-          >
-            <UploadCloud className="w-3.5 h-3.5 text-indigo-500" />
-            <span>Import SOP</span>
-          </button>
+              <button
+                onClick={handleImportBundle}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 text-xs font-medium transition-colors shadow-xs cursor-pointer"
+                title="Import an SOP Procedure Bundle (.stepflow or .zip)"
+              >
+                <UploadCloud className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Import SOP</span>
+              </button>
 
-          <button
-            onClick={() => setShowMcpModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 text-xs font-medium transition-colors shadow-xs cursor-pointer"
-            title="Connect Claude Desktop via Model Context Protocol (MCP)"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-            <span>Claude MCP</span>
-          </button>
+              <button
+                onClick={() => setShowMcpModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 text-xs font-medium transition-colors shadow-xs cursor-pointer"
+                title="Connect Claude Desktop via Model Context Protocol (MCP)"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                <span>Claude MCP</span>
+              </button>
 
-          <button
-            onClick={() => setShowNewModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-950 text-xs font-medium transition-colors shadow-sm cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New SOP Project</span>
-          </button>
+              <button
+                onClick={() => setShowNewModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-950 text-xs font-medium transition-colors shadow-sm cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New SOP Project</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setShowSearchHud(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 text-xs font-medium transition-colors shadow-xs cursor-pointer"
+                title="Open Spotlight Search HUD (Ctrl+Shift+F)"
+              >
+                <Search className="w-3.5 h-3.5 text-blue-500" />
+                <span>Spotlight HUD</span>
+                <span className="font-mono text-[10px] text-zinc-400">Ctrl+Shift+F</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setEditorItem(null);
+                  setShowEditorModal(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors shadow-sm cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Error Solution</span>
+              </button>
+            </>
+          )}
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-6 md:p-8 flex flex-col">
+      {libraryTab === 'error_faq' ? (
+        <ErrorKnowledgeBaseView onOpenSearchHud={() => setShowSearchHud(true)} />
+      ) : (
+        <main className="flex-1 max-w-6xl w-full mx-auto p-6 md:p-8 flex flex-col">
         {/* Search & Statistics Bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
           <div className="relative flex-1 max-w-md">
@@ -529,6 +613,7 @@ export const ProjectLibrary: React.FC = () => {
           </div>
         )}
       </main>
+      )}
 
       {/* New Project Modal */}
       {showNewModal && (
@@ -886,6 +971,33 @@ export const ProjectLibrary: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Error Search Spotlight HUD Modal */}
+      <ErrorSearchModal
+        isOpen={showSearchHud}
+        onClose={() => setShowSearchHud(false)}
+        onAddNew={() => {
+          setEditorItem(null);
+          setShowEditorModal(true);
+        }}
+        onEditItem={(item) => {
+          setEditorItem(item);
+          setShowEditorModal(true);
+        }}
+      />
+
+      {/* Error FAQ Editor Modal */}
+      <ErrorFaqEditorModal
+        isOpen={showEditorModal}
+        itemToEdit={editorItem}
+        onClose={() => {
+          setShowEditorModal(false);
+          setEditorItem(null);
+        }}
+        onSaved={() => {
+          loadErrorFaq();
+        }}
+      />
 
       {/* Floating Action Feedback Toast */}
       {feedbackMessage && (

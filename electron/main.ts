@@ -17,7 +17,8 @@ import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { pathToFileURL } from 'url';
 import JSZip from 'jszip';
-import type { SopProject } from '../src/types/sop';
+import { createWorker } from 'tesseract.js';
+import type { SopProject, ErrorFaqItem, OcrAnalysisResult } from '../src/types/sop';
 
 // Register custom protocol for local asset streaming with CORS enabled
 protocol.registerSchemesAsPrivileged([
@@ -115,6 +116,7 @@ function getWorkspaceRoot(): string {
 
 const getAssetsDir = (): string => path.join(getWorkspaceRoot(), 'stepflow_assets');
 const getProjectsDir = (): string => path.join(getWorkspaceRoot(), 'projects');
+const getErrorCatalogDir = (): string => path.join(getWorkspaceRoot(), 'error_catalog');
 
 const recentlySavedByApp = new Set<string>();
 let projectWatcher: fs.FSWatcher | null = null;
@@ -179,6 +181,7 @@ function setupProjectsFileWatcher(): void {
 async function ensureDirectories(): Promise<void> {
   await fs.promises.mkdir(getAssetsDir(), { recursive: true });
   await fs.promises.mkdir(getProjectsDir(), { recursive: true });
+  await fs.promises.mkdir(getErrorCatalogDir(), { recursive: true });
 }
 
 interface SelectionRect {
@@ -549,13 +552,16 @@ function createOverlayWindow(): BrowserWindow {
   return overlayWindow;
 }
 
-function setOverlayMode(mode: 'collapsed' | 'expanded' | 'preview'): void {
+function setOverlayMode(mode: 'collapsed' | 'expanded' | 'preview' | 'error_match' | 'error_new' | 'search'): void {
   if (!overlayWindow || overlayWindow.isDestroyed()) return;
 
-  const modeSizes: Record<'collapsed' | 'expanded' | 'preview', { width: number; height: number }> = {
+  const modeSizes: Record<'collapsed' | 'expanded' | 'preview' | 'error_match' | 'error_new' | 'search', { width: number; height: number }> = {
     collapsed: { width: 340, height: 76 },
     expanded: { width: 380, height: 280 },
     preview: { width: 340, height: 180 },
+    error_match: { width: 380, height: 320 },
+    error_new: { width: 400, height: 420 },
+    search: { width: 540, height: 460 },
   };
 
   const target = modeSizes[mode] || modeSizes.collapsed;
@@ -958,6 +964,28 @@ function registerGlobalShortcuts(): void {
   if (!selSuccess) {
     console.warn(`[Shortcut] Registration failed for ${selectionShortcut}`);
   }
+
+  // Quick Search HUD shortcut: Cmd/Ctrl+Shift+F
+  const searchShortcut = 'CommandOrControl+Shift+F';
+  const searchSuccess = globalShortcut.register(searchShortcut, () => {
+    try {
+      if (studioWindow && !studioWindow.isDestroyed()) {
+        if (studioWindow.isMinimized()) studioWindow.restore();
+        studioWindow.show();
+        studioWindow.focus();
+        studioWindow.webContents.send('open-search-hud');
+      }
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        overlayWindow.webContents.send('open-search-hud');
+      }
+    } catch (err) {
+      console.error('[Shortcut] Error in search HUD shortcut:', err);
+    }
+  });
+
+  if (!searchSuccess) {
+    console.warn(`[Shortcut] Registration failed for ${searchShortcut}`);
+  }
 }
 
 async function showSaveDialogHelper(options: Electron.SaveDialogOptions): Promise<Electron.SaveDialogReturnValue> {
@@ -972,6 +1000,238 @@ async function showOpenDialogHelper(options: Electron.OpenDialogOptions): Promis
     return await dialog.showOpenDialog(studioWindow, options);
   }
   return await dialog.showOpenDialog(options);
+}
+
+// =========================================================
+// Error & FAQ Knowledge Base + Offline OCR Engine
+// =========================================================
+
+let ocrWorkerInstance: any = null;
+let ocrWorkerInitPromise: Promise<any> | null = null;
+
+async function getOcrWorker(): Promise<any> {
+  if (ocrWorkerInstance) return ocrWorkerInstance;
+  if (ocrWorkerInitPromise) return await ocrWorkerInitPromise;
+
+  ocrWorkerInitPromise = (async () => {
+    appendRuntimeLog('[OCR] Initializing bundled Tesseract worker...');
+    const worker = await createWorker('eng');
+    ocrWorkerInstance = worker;
+    appendRuntimeLog('[OCR] Tesseract worker ready');
+    return worker;
+  })();
+
+  return await ocrWorkerInitPromise;
+}
+
+function extractErrorCode(text: string): string | undefined {
+  if (!text) return undefined;
+  // 1. Hex codes: e.g. 0x80040115, 0x80070005
+  const hexMatch = text.match(/\b0x[0-9a-fA-F]{4,10}\b/);
+  if (hexMatch) return hexMatch[0];
+
+  // 2. ERR_ or ERROR_ prefixed: e.g. ERR_CONNECTION_TIMED_OUT
+  const errMatch = text.match(/\b(?:ERR|ERROR)[_-][A-Z0-9_-]{3,30}\b/i);
+  if (errMatch) return errMatch[0].toUpperCase();
+
+  // 3. Application error codes: e.g. SAP-1049, ORA-00942, HTTP-403
+  const appMatch = text.match(/\b[A-Z]{2,6}[-_][0-9]{3,6}\b/);
+  if (appMatch) return appMatch[0].toUpperCase();
+
+  // 4. Labeled code: "Error Code: 404"
+  const labeledMatch = text.match(/\b(?:Error\s*Code|Status\s*Code|Error\s*#|Code)[\s:#]+([0-9A-Za-z_-]{2,15})\b/i);
+  if (labeledMatch && labeledMatch[1]) return labeledMatch[1];
+
+  return undefined;
+}
+
+function extractErrorTitle(text: string, errorCode?: string): string {
+  if (!text || !text.trim()) return 'Unspecified Error';
+
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length >= 3 && !/^[^a-zA-Z0-9]+$/.test(l));
+
+  // Look for a line containing "error", "failed", "exception", "warning", "unable"
+  const triggerLine = lines.find((l) =>
+    /(error|failed|failure|exception|warning|unable|denied|cannot|timeout|problem)/i.test(l)
+  );
+
+  if (triggerLine) {
+    return triggerLine.length > 60 ? triggerLine.slice(0, 57) + '...' : triggerLine;
+  }
+
+  if (lines[0]) {
+    const first = lines[0];
+    return first.length > 60 ? first.slice(0, 57) + '...' : first;
+  }
+
+  return errorCode ? `Error ${errorCode}` : 'Detected Error Dialog';
+}
+
+function tokenize(text: string): Set<string> {
+  const words = text
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 3);
+  return new Set(words);
+}
+
+function calculateFuzzyMatch(rawText: string, errorCode: string | undefined, item: ErrorFaqItem): number {
+  if (errorCode && item.errorCode && errorCode.toLowerCase() === item.errorCode.toLowerCase()) {
+    return 0.95;
+  }
+
+  const queryTokens = tokenize(rawText);
+  if (queryTokens.size === 0) return 0;
+
+  const itemTokens = tokenize(`${item.title} ${item.errorCode || ''} ${item.rawOcrText} ${item.tags.join(' ')}`);
+  if (itemTokens.size === 0) return 0;
+
+  let common = 0;
+  for (const token of queryTokens) {
+    if (itemTokens.has(token)) common++;
+  }
+
+  const similarity = (2 * common) / (queryTokens.size + itemTokens.size);
+  return Math.min(1, Math.max(0, similarity));
+}
+
+async function listErrorFaqItems(): Promise<ErrorFaqItem[]> {
+  try {
+    await ensureDirectories();
+    const catalogDir = getErrorCatalogDir();
+    const files = await fs.promises.readdir(catalogDir);
+    const jsonFiles = files.filter((f) => f.endsWith('.json') && !f.includes('.tmp'));
+    const items: ErrorFaqItem[] = [];
+
+    for (const file of jsonFiles) {
+      try {
+        const filePath = path.join(catalogDir, file);
+        const raw = await fs.promises.readFile(filePath, 'utf-8');
+        const item = JSON.parse(raw) as ErrorFaqItem;
+        if (item && item.id) items.push(item);
+      } catch (err) {
+        console.warn(`[ErrorCatalog] Failed to parse ${file}:`, err);
+      }
+    }
+
+    items.sort(
+      (a, b) =>
+        new Date(b.updatedAt || b.createdAt || 0).getTime() -
+        new Date(a.updatedAt || a.createdAt || 0).getTime()
+    );
+    return items;
+  } catch (err) {
+    console.error('[ErrorCatalog] Failed to list items:', err);
+    return [];
+  }
+}
+
+async function saveErrorFaqItem(item: ErrorFaqItem): Promise<boolean> {
+  try {
+    if (!item || !item.id) return false;
+    await ensureDirectories();
+    const safeId = item.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const catalogDir = getErrorCatalogDir();
+    const filePath = path.join(catalogDir, `err_${safeId}.json`);
+    const tempPath = path.join(catalogDir, `err_${safeId}.${Date.now()}.tmp`);
+
+    const now = new Date().toISOString();
+    if (!item.createdAt) item.createdAt = now;
+    item.updatedAt = now;
+
+    await fs.promises.writeFile(tempPath, JSON.stringify(item, null, 2), 'utf-8');
+    await fs.promises.rename(tempPath, filePath);
+    return true;
+  } catch (err) {
+    console.error('[ErrorCatalog] Failed to save item:', err);
+    return false;
+  }
+}
+
+async function deleteErrorFaqItem(id: string): Promise<boolean> {
+  try {
+    if (!id) return false;
+    const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filePath = path.join(getErrorCatalogDir(), `err_${safeId}.json`);
+    if (fs.existsSync(filePath)) {
+      await fs.promises.unlink(filePath);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('[ErrorCatalog] Failed to delete item:', err);
+    return false;
+  }
+}
+
+async function importPastedImageHelper(base64Data: string): Promise<string> {
+  await ensureDirectories();
+  const raw = base64Data.replace(/^data:image\/\w+;base64,/, '');
+  const buffer = Buffer.from(raw, 'base64');
+  const filename = `paste_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.png`;
+  const filePath = path.join(getAssetsDir(), filename);
+  await fs.promises.writeFile(filePath, buffer);
+  return filePath;
+}
+
+async function analyzeImageWithOcr(imagePathOrBase64: string): Promise<OcrAnalysisResult> {
+  await ensureDirectories();
+  const assetsDir = getAssetsDir();
+
+  let targetFilePath = imagePathOrBase64;
+  let imageBuffer: Buffer | null = null;
+
+  if (imagePathOrBase64.startsWith('data:image/')) {
+    const base64Data = imagePathOrBase64.replace(/^data:image\/\w+;base64,/, '');
+    imageBuffer = Buffer.from(base64Data, 'base64');
+    const filename = `error_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.png`;
+    targetFilePath = path.join(assetsDir, filename);
+    await fs.promises.writeFile(targetFilePath, imageBuffer);
+  } else if (!fs.existsSync(imagePathOrBase64)) {
+    throw new Error(`File not found: ${imagePathOrBase64}`);
+  } else {
+    if (!imagePathOrBase64.startsWith(assetsDir)) {
+      const ext = path.extname(imagePathOrBase64) || '.png';
+      const filename = `error_${Date.now()}_${Math.random().toString(36).substring(2, 7)}${ext}`;
+      const dest = path.join(assetsDir, filename);
+      await fs.promises.copyFile(imagePathOrBase64, dest);
+      targetFilePath = dest;
+    }
+    imageBuffer = await fs.promises.readFile(targetFilePath);
+  }
+
+  appendRuntimeLog(`[OCR] Starting recognition on ${targetFilePath}`);
+  const worker = await getOcrWorker();
+  const result = await worker.recognize(imageBuffer || targetFilePath);
+  const rawText = (result?.data?.text || '').trim();
+  appendRuntimeLog(`[OCR] Completed recognition, extracted ${rawText.length} chars`);
+
+  const detectedErrorCode = extractErrorCode(rawText);
+  const detectedTitle = extractErrorTitle(rawText, detectedErrorCode);
+
+  const items = await listErrorFaqItems();
+  let bestMatch: { item: ErrorFaqItem; confidence: number } | undefined = undefined;
+
+  for (const item of items) {
+    const score = calculateFuzzyMatch(rawText, detectedErrorCode, item);
+    if (score >= 0.45) {
+      if (!bestMatch || score > bestMatch.confidence) {
+        bestMatch = { item, confidence: Math.round(score * 100) / 100 };
+      }
+    }
+  }
+
+  return {
+    rawText,
+    detectedTitle,
+    detectedErrorCode,
+    imagePath: targetFilePath,
+    bestMatch,
+  };
 }
 
 function registerIpcHandlers(): void {
@@ -1084,8 +1344,32 @@ function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.on('set-overlay-size', (_event, mode: 'collapsed' | 'expanded' | 'preview') => {
-    setOverlayMode(mode);
+  ipcMain.on(
+    'set-overlay-size',
+    (_event, mode: 'collapsed' | 'expanded' | 'preview' | 'error_match' | 'error_new' | 'search') => {
+      setOverlayMode(mode);
+    }
+  );
+
+  // Error & FAQ Knowledge Base + OCR
+  ipcMain.handle('analyze-error-image', async (_event, imagePathOrBase64: string): Promise<OcrAnalysisResult> => {
+    return await analyzeImageWithOcr(imagePathOrBase64);
+  });
+
+  ipcMain.handle('list-error-faq', async (): Promise<ErrorFaqItem[]> => {
+    return await listErrorFaqItems();
+  });
+
+  ipcMain.handle('save-error-faq', async (_event, item: ErrorFaqItem): Promise<boolean> => {
+    return await saveErrorFaqItem(item);
+  });
+
+  ipcMain.handle('delete-error-faq', async (_event, id: string): Promise<boolean> => {
+    return await deleteErrorFaqItem(id);
+  });
+
+  ipcMain.handle('import-pasted-image', async (_event, base64Data: string): Promise<string> => {
+    return await importPastedImageHelper(base64Data);
   });
 
   // Project I/O
