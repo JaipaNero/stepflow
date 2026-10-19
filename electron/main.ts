@@ -1015,9 +1015,6 @@ async function showOpenDialogHelper(options: Electron.OpenDialogOptions): Promis
 }
 
 // =========================================================
-// Error & FAQ Knowledge Base + Offline OCR Engine
-// =========================================================
-
 let ocrWorkerInstance: any = null;
 let ocrWorkerInitPromise: Promise<any> | null = null;
 
@@ -1025,15 +1022,36 @@ async function getOcrWorker(): Promise<any> {
   if (ocrWorkerInstance) return ocrWorkerInstance;
   if (ocrWorkerInitPromise) return await ocrWorkerInitPromise;
 
+  const appRoot = app.isPackaged ? process.resourcesPath : process.cwd();
+
   ocrWorkerInitPromise = (async () => {
-    appendRuntimeLog('[OCR] Initializing bundled Tesseract worker...');
-    const worker = await createWorker('eng');
-    ocrWorkerInstance = worker;
-    appendRuntimeLog('[OCR] Tesseract worker ready');
-    return worker;
+    appendRuntimeLog(`[OCR] Initializing bundled Tesseract worker from ${appRoot}...`);
+    try {
+      const worker = await createWorker('eng', 1, {
+        langPath: appRoot,
+        cachePath: appRoot,
+        logger: (m) => {
+          if (m.status && m.progress === 1) {
+            appendRuntimeLog(`[OCR progress] ${m.status}: 100%`);
+          }
+        }
+      });
+      ocrWorkerInstance = worker;
+      appendRuntimeLog('[OCR] Tesseract worker ready');
+      return worker;
+    } catch (err) {
+      appendRuntimeLog('[OCR] Worker initialization failed', err);
+      ocrWorkerInitPromise = null;
+      throw err;
+    }
   })();
 
-  return await ocrWorkerInitPromise;
+  try {
+    return await ocrWorkerInitPromise;
+  } catch (err) {
+    ocrWorkerInitPromise = null;
+    throw err;
+  }
 }
 
 function extractErrorCode(text: string): string | undefined {
@@ -1217,10 +1235,26 @@ async function analyzeImageWithOcr(imagePathOrBase64: string): Promise<OcrAnalys
   }
 
   appendRuntimeLog(`[OCR] Starting recognition on ${targetFilePath}`);
-  const worker = await getOcrWorker();
-  const result = await worker.recognize(imageBuffer || targetFilePath);
-  const rawText = (result?.data?.text || '').trim();
-  appendRuntimeLog(`[OCR] Completed recognition, extracted ${rawText.length} chars`);
+  let rawText = '';
+  try {
+    const workerPromise = getOcrWorker();
+    const timeoutWorker = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('OCR worker init timeout (10s)')), 10000)
+    );
+    const worker = await Promise.race([workerPromise, timeoutWorker]) as any;
+
+    const recognizePromise = worker.recognize(imageBuffer || targetFilePath);
+    const timeoutRecognize = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('OCR recognize timeout (10s)')), 10000)
+    );
+    const result = await Promise.race([recognizePromise, timeoutRecognize]) as any;
+
+    rawText = (result?.data?.text || '').trim();
+    appendRuntimeLog(`[OCR] Completed recognition, extracted ${rawText.length} chars`);
+  } catch (ocrErr) {
+    appendRuntimeLog('[OCR] Error or timeout during recognition', ocrErr);
+    console.warn('[OCR] Recognition error or timeout:', ocrErr);
+  }
 
   const detectedErrorCode = extractErrorCode(rawText);
   const detectedTitle = extractErrorTitle(rawText, detectedErrorCode);

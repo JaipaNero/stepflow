@@ -353,11 +353,31 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
     notifyElectronSize('ocr_scanning');
     setIsCopied(false);
 
+    // Safety timeout: never stay in ocr_scanning for more than 12 seconds
+    const scanningSafetyTimer = setTimeout(() => {
+      setDotState((current) => {
+        if (current === 'ocr_scanning') {
+          notifyElectronSize('error_new');
+          setNewErrorTitle('Unspecified Error');
+          setNewErrorCode('');
+          setNewErrorSolution('');
+          setNewErrorTags('');
+          return 'error_new';
+        }
+        return current;
+      });
+    }, 12000);
+
     try {
       const result = await analyzeImageWithOcr(imagePathOrBase64);
+      clearTimeout(scanningSafetyTimer);
       if (!result) {
-        setDotState('collapsed');
-        notifyElectronSize('collapsed');
+        setNewErrorTitle('Unspecified Error');
+        setNewErrorCode('');
+        setNewErrorSolution('');
+        setNewErrorTags('');
+        setDotState('error_new');
+        notifyElectronSize('error_new');
         return;
       }
 
@@ -375,9 +395,14 @@ export const FloatingDot: React.FC<FloatingDotProps> = ({ onTriggerCapture }) =>
         notifyElectronSize('error_new');
       }
     } catch (err) {
+      clearTimeout(scanningSafetyTimer);
       console.error('OCR processing failed:', err);
-      setDotState('collapsed');
-      notifyElectronSize('collapsed');
+      setNewErrorTitle('Unspecified Error');
+      setNewErrorCode('');
+      setNewErrorSolution('');
+      setNewErrorTags('');
+      setDotState('error_new');
+      notifyElectronSize('error_new');
     }
   };
 
