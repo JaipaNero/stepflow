@@ -457,6 +457,35 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
   if (activeStepId === 'cover') {
     return (
       <div className="flex-1 flex flex-col bg-zinc-100/70 dark:bg-zinc-950/80 overflow-hidden relative">
+        {(!leftOpen || !rightOpen) && (
+          <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-900/90 flex items-center justify-between text-xs select-none shrink-0 z-10">
+            <div className="flex items-center gap-1.5">
+              {!leftOpen && onOpenLeft && (
+                <button
+                  type="button"
+                  onClick={onOpenLeft}
+                  className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer mr-0.5"
+                  title={`Expand Step Outline (${cmdLabel}+B)`}
+                >
+                  <PanelLeftOpen className="w-4 h-4" />
+                </button>
+              )}
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-[11px] uppercase tracking-wider">
+                Front Cover Page
+              </span>
+            </div>
+            {!rightOpen && onOpenRight && (
+              <button
+                type="button"
+                onClick={onOpenRight}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer ml-0.5"
+                title={`Expand Step Inspector (${cmdLabel}+I)`}
+              >
+                <PanelRightOpen className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
         <CoverPageStudio />
       </div>
     );
@@ -465,6 +494,35 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
   if (activeStepId === 'index') {
     return (
       <div className="flex-1 flex flex-col bg-zinc-100/70 dark:bg-zinc-950/80 overflow-hidden relative">
+        {(!leftOpen || !rightOpen) && (
+          <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-900/90 flex items-center justify-between text-xs select-none shrink-0 z-10">
+            <div className="flex items-center gap-1.5">
+              {!leftOpen && onOpenLeft && (
+                <button
+                  type="button"
+                  onClick={onOpenLeft}
+                  className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer mr-0.5"
+                  title={`Expand Step Outline (${cmdLabel}+B)`}
+                >
+                  <PanelLeftOpen className="w-4 h-4" />
+                </button>
+              )}
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-[11px] uppercase tracking-wider">
+                Table of Contents
+              </span>
+            </div>
+            {!rightOpen && onOpenRight && (
+              <button
+                type="button"
+                onClick={onOpenRight}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer ml-0.5"
+                title={`Expand Step Inspector (${cmdLabel}+I)`}
+              >
+                <PanelRightOpen className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
         <TableOfContentsStudio />
       </div>
     );
@@ -472,8 +530,34 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
 
   if (!currentStep) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-zinc-100/70 dark:bg-zinc-950/80 text-zinc-400 text-xs select-none">
-        Select a step from the outline or customize the front cover page.
+      <div className="flex-1 flex flex-col bg-zinc-100/70 dark:bg-zinc-950/80 overflow-hidden relative select-none">
+        {(!leftOpen || !rightOpen) && (
+          <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-900/90 flex items-center justify-between text-xs shrink-0 z-10">
+            {!leftOpen && onOpenLeft ? (
+              <button
+                type="button"
+                onClick={onOpenLeft}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer mr-0.5"
+                title={`Expand Step Outline (${cmdLabel}+B)`}
+              >
+                <PanelLeftOpen className="w-4 h-4" />
+              </button>
+            ) : <div />}
+            {!rightOpen && onOpenRight && (
+              <button
+                type="button"
+                onClick={onOpenRight}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer ml-0.5"
+                title={`Expand Step Inspector (${cmdLabel}+I)`}
+              >
+                <PanelRightOpen className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-zinc-400 text-xs">
+          Select a step from the outline or customize the front cover page.
+        </div>
       </div>
     );
   }
