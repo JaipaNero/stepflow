@@ -375,10 +375,6 @@ export const RichInstructionsEditor: React.FC<RichInstructionsEditorProps> = ({
             >
               <Code className="w-3.5 h-3.5" />
             </button>
-
-            <div className="ml-auto text-[9px] font-mono text-zinc-400 dark:text-zinc-500 pr-1 hidden sm:inline">
-              Markdown
-            </div>
           </div>
 
           {/* Interactive Textarea */}
