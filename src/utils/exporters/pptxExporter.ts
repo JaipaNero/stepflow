@@ -475,12 +475,9 @@ export async function buildPptxPresentation(project: SopProject): Promise<PptxGe
         .replace(/^###\s+/gm, '')
         .replace(/^##\s+/gm, '')
         .replace(/^#\s+/gm, '')
-        .replace(/^[-*]\s+/gm, '• ')
-        .replace(/^-\s\[[ x]\]\s*/gim, '• [ ] ')
         .replace(/^>\s+/gm, '    ')
         .replace(/\*\*(.*?)\*\*/g, '$1')
-        .replace(/\*(.*?)\*/g, '$1')
-        .replace(/`([^`]+)`/g, '$1');
+        .replace(/\*(.*?)\*/g, '$1');
 
       slide.addText(cleanDesc, {
         x: 1.1,

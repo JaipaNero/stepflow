@@ -394,12 +394,8 @@ export async function buildPdfDocument(project: SopProject): Promise<jsPDF> {
         .replace(/^###\s+/gm, '')
         .replace(/^##\s+/gm, '')
         .replace(/^#\s+/gm, '')
-        .replace(/^[-*]\s+/gm, '• ')
-        .replace(/^-\s\[[ x]\]\s*/gim, '• [ ] ')
-        .replace(/^>\s+/gm, '  ')
         .replace(/\*\*(.*?)\*\*/g, '$1')
-        .replace(/\*(.*?)\*/g, '$1')
-        .replace(/`([^`]+)`/g, '$1');
+        .replace(/\*(.*?)\*/g, '$1');
 
       const descLines = doc.splitTextToSize(cleanDesc, cardContentW);
       doc.text(descLines, cardContentX, currentY + 8);

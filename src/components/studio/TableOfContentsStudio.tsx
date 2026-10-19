@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 import { useSopStore, isDefaultStepTitle } from '../../store/useSopStore';
 import { SopStep } from '../../types/sop';
-import { stripMarkdown } from '../../utils/markdownHelper';
 
 export const TableOfContentsStudio: React.FC = () => {
   const { activeProject, setActiveStepId, updateCoverPageSettings } = useSopStore();
@@ -113,7 +112,7 @@ export const TableOfContentsStudio: React.FC = () => {
                         </div>
                         {step.description && (
                           <p className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
-                            {stripMarkdown(step.description)}
+                            {step.description}
                           </p>
                         )}
                       </div>

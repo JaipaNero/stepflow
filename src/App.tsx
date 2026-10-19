@@ -105,8 +105,9 @@ export const App: React.FC = () => {
         unsubscribeFileChanged = window.electronAPI.onProjectFileChanged((data) => {
           const store = useSopStore.getState();
           if (data.action === 'save' && data.project) {
-            const remaining = store.projects.filter((p) => p.id !== data.id && p.id !== data.project!.id);
-            const updated = [data.project, ...remaining];
+            const updated = store.projects.some((p) => p.id === data.id)
+              ? store.projects.map((p) => (p.id === data.id ? data.project! : p))
+              : [data.project, ...store.projects];
 
             useSopStore.setState({ projects: updated });
 

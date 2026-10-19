@@ -6,9 +6,7 @@ import {
   BeautifySettings,
   AnnotationItem,
   CoverPageSettings,
-  DEFAULT_COVER_PAGE_SETTINGS,
-  ErrorFaqItem,
-  OcrAnalysisResult,
+  DEFAULT_COVER_PAGE_SETTINGS
 } from '../types/sop';
 import { SAMPLE_PROJECT, DEFAULT_THEME } from './sampleData';
 
@@ -26,21 +24,8 @@ export interface SopState {
   lastDeletedStep: { step: SopStep; index: number } | null;
   retakeStepId: string | null;
 
-  // Error FAQ State
-  errorFaqItems: ErrorFaqItem[];
-  activeErrorAnalysis: OcrAnalysisResult | null;
-  isAnalyzingOcr: boolean;
-  isSearchHudOpen: boolean;
-
   // Actions
   loadProjects: () => Promise<void>;
-  loadErrorFaq: () => Promise<void>;
-  saveErrorFaqItem: (item: ErrorFaqItem) => Promise<boolean>;
-  deleteErrorFaqItem: (id: string) => Promise<boolean>;
-  setActiveErrorAnalysis: (result: OcrAnalysisResult | null) => void;
-  setIsAnalyzingOcr: (isAnalyzing: boolean) => void;
-  setIsSearchHudOpen: (isOpen: boolean) => void;
-  analyzeImageWithOcr: (imagePathOrBase64: string) => Promise<OcrAnalysisResult | null>;
   createProject: (name?: string, description?: string, author?: string) => SopProject;
   selectProject: (id: string | null) => void;
   syncActiveProjectFromExternal: (project: SopProject | null) => void;
@@ -68,38 +53,17 @@ export interface SopState {
   setRecentCapture: (capture: string | null) => void;
 }
 
-// Helper to deduplicate projects by ID, keeping the latest updated version
-export function deduplicateProjects(projects: SopProject[]): SopProject[] {
-  const map = new Map<string, SopProject>();
-  for (const p of projects) {
-    if (!p || !p.id) continue;
-    const existing = map.get(p.id);
-    if (!existing) {
-      map.set(p.id, p);
-    } else {
-      const timeExisting = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
-      const timeNew = new Date(p.updatedAt || p.createdAt || 0).getTime();
-      if (timeNew >= timeExisting) {
-        map.set(p.id, p);
-      }
-    }
-  }
-  return Array.from(map.values());
-}
-
 // Helper to save projects to storage and IPC if present
 function persistProjects(projects: SopProject[]) {
   try {
-    const deduped = deduplicateProjects(projects);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(deduped));
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(projects));
   } catch (err) {
     console.error('Failed to save to localStorage:', err);
   }
 }
 
 function broadcastProjectUpdate(project: SopProject, projects: SopProject[]) {
-  const deduped = deduplicateProjects(projects);
-  persistProjects(deduped);
+  persistProjects(projects);
   try {
     localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
   } catch (err) {
@@ -165,8 +129,7 @@ function loadInitialProjects(): { projects: SopProject[]; activeProject: SopProj
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const deduped = deduplicateProjects(parsed);
-        const normalized = deduped.map(normalizeProjectSteps);
+        const normalized = parsed.map(normalizeProjectSteps);
         const savedActiveId = localStorage.getItem(ACTIVE_PROJECT_KEY);
         const active = savedActiveId ? normalized.find((p: SopProject) => p.id === savedActiveId) || normalized[0] : normalized[0];
         return { projects: normalized, activeProject: active || null };
@@ -186,18 +149,12 @@ const initialSavedActiveId = typeof localStorage !== 'undefined' ? localStorage.
 export const useSopStore = create<SopState>((set, get) => ({
   projects: initialProjects,
   activeProject: initialActiveProject,
-  activeStepId: initialActiveProject?.steps[0]?.id || (initialActiveProject ? 'cover' : null),
+  activeStepId: initialActiveProject?.steps[0]?.id || null,
   activeView: (initialActiveProject && initialSavedActiveId) ? 'studio' : 'library',
   isCapturing: false,
   recentCapture: null,
   lastDeletedStep: null,
   retakeStepId: null,
-
-  // Error FAQ State
-  errorFaqItems: [],
-  activeErrorAnalysis: null,
-  isAnalyzingOcr: false,
-  isSearchHudOpen: false,
 
   loadProjects: async () => {
     try {
@@ -212,7 +169,7 @@ export const useSopStore = create<SopState>((set, get) => ({
         const { projects } = loadInitialProjects();
         loadedProjects = projects;
       }
-      loadedProjects = deduplicateProjects(loadedProjects).map(normalizeProjectSteps);
+      loadedProjects = loadedProjects.map(normalizeProjectSteps);
       persistProjects(loadedProjects);
 
       const savedActiveId = typeof localStorage !== 'undefined' ? localStorage.getItem(ACTIVE_PROJECT_KEY) : null;
@@ -232,7 +189,7 @@ export const useSopStore = create<SopState>((set, get) => ({
         set({
           projects: loadedProjects,
           activeProject: active,
-          activeStepId: active.steps[0]?.id || 'cover',
+          activeStepId: active.steps[0]?.id || null,
           activeView: 'studio'
         });
       } else {
@@ -249,7 +206,7 @@ export const useSopStore = create<SopState>((set, get) => ({
       set({
         projects,
         activeProject,
-        activeStepId: activeProject?.steps[0]?.id || (activeProject ? 'cover' : null)
+        activeStepId: activeProject?.steps[0]?.id || null
       });
     }
   },
@@ -280,7 +237,7 @@ export const useSopStore = create<SopState>((set, get) => ({
     set({
       projects: updatedProjects,
       activeProject: newProject,
-      activeStepId: 'cover',
+      activeStepId: null,
       activeView: 'studio'
     });
 
@@ -313,7 +270,7 @@ export const useSopStore = create<SopState>((set, get) => ({
       }
       set({
         activeProject: normalized,
-        activeStepId: normalized.steps[0]?.id || 'cover',
+        activeStepId: normalized.steps[0]?.id || null,
         activeView: 'studio'
       });
     }
@@ -407,7 +364,7 @@ export const useSopStore = create<SopState>((set, get) => ({
     set({
       projects: updatedProjects,
       activeProject: nextActive,
-      activeStepId: nextActive ? nextActive.steps[0]?.id || 'cover' : null,
+      activeStepId: nextActive ? nextActive.steps[0]?.id || null : null,
       activeView: nextActive ? 'studio' : 'library'
     });
   },
@@ -550,8 +507,7 @@ export const useSopStore = create<SopState>((set, get) => ({
         ? {
             originalImagePath: imagePath,
             dimensions: { width: 1280, height: 720 },
-            annotations: [],
-            annotatedCachePath: undefined,
+            annotations: []
           }
         : undefined
     };
@@ -652,7 +608,7 @@ export const useSopStore = create<SopState>((set, get) => ({
 
     let nextActiveStepId = activeStepId;
     if (activeStepId === stepId) {
-      nextActiveStepId = remainingSteps[stepIndex]?.id || remainingSteps[stepIndex - 1]?.id || remainingSteps[0]?.id || 'cover';
+      nextActiveStepId = remainingSteps[stepIndex]?.id || remainingSteps[stepIndex - 1]?.id || remainingSteps[0]?.id || null;
     }
 
     const updatedProject: SopProject = {
@@ -762,8 +718,7 @@ export const useSopStore = create<SopState>((set, get) => ({
           image: {
             originalImagePath: newImagePath,
             dimensions: s.image?.dimensions || { width: 1280, height: 720 },
-            annotations: s.image?.annotations || [],
-            annotatedCachePath: undefined,
+            annotations: s.image?.annotations || []
           }
         };
       }
@@ -797,8 +752,7 @@ export const useSopStore = create<SopState>((set, get) => ({
           ...s,
           image: {
             ...s.image,
-            annotations,
-            annotatedCachePath: undefined,
+            annotations
           }
         };
       }
@@ -888,87 +842,5 @@ export const useSopStore = create<SopState>((set, get) => ({
 
   setRecentCapture: (capture: string | null) => {
     set({ recentCapture: capture });
-  },
-
-  loadErrorFaq: async () => {
-    try {
-      if (typeof window !== 'undefined' && window.electronAPI?.listErrorFaq) {
-        const items = await window.electronAPI.listErrorFaq();
-        set({ errorFaqItems: items || [] });
-      }
-    } catch (err) {
-      console.error('Failed to load error FAQ items:', err);
-    }
-  },
-
-  saveErrorFaqItem: async (item: ErrorFaqItem): Promise<boolean> => {
-    try {
-      if (typeof window !== 'undefined' && window.electronAPI?.saveErrorFaq) {
-        const success = await window.electronAPI.saveErrorFaq(item);
-        if (success) {
-          const { errorFaqItems } = get();
-          const existingIdx = errorFaqItems.findIndex((i) => i.id === item.id);
-          let updated: ErrorFaqItem[];
-          if (existingIdx >= 0) {
-            updated = [...errorFaqItems];
-            updated[existingIdx] = item;
-          } else {
-            updated = [item, ...errorFaqItems];
-          }
-          set({ errorFaqItems: updated });
-        }
-        return success;
-      }
-      return false;
-    } catch (err) {
-      console.error('Failed to save error FAQ item:', err);
-      return false;
-    }
-  },
-
-  deleteErrorFaqItem: async (id: string): Promise<boolean> => {
-    try {
-      if (typeof window !== 'undefined' && window.electronAPI?.deleteErrorFaq) {
-        const success = await window.electronAPI.deleteErrorFaq(id);
-        if (success) {
-          const { errorFaqItems } = get();
-          set({ errorFaqItems: errorFaqItems.filter((i) => i.id !== id) });
-        }
-        return success;
-      }
-      return false;
-    } catch (err) {
-      console.error('Failed to delete error FAQ item:', err);
-      return false;
-    }
-  },
-
-  setActiveErrorAnalysis: (result: OcrAnalysisResult | null) => {
-    set({ activeErrorAnalysis: result });
-  },
-
-  setIsAnalyzingOcr: (isAnalyzing: boolean) => {
-    set({ isAnalyzingOcr: isAnalyzing });
-  },
-
-  setIsSearchHudOpen: (isOpen: boolean) => {
-    set({ isSearchHudOpen: isOpen });
-  },
-
-  analyzeImageWithOcr: async (imagePathOrBase64: string): Promise<OcrAnalysisResult | null> => {
-    set({ isAnalyzingOcr: true });
-    try {
-      if (typeof window !== 'undefined' && window.electronAPI?.analyzeErrorImage) {
-        const result = await window.electronAPI.analyzeErrorImage(imagePathOrBase64);
-        set({ activeErrorAnalysis: result, isAnalyzingOcr: false });
-        return result;
-      }
-      set({ isAnalyzingOcr: false });
-      return null;
-    } catch (err) {
-      console.error('Failed to analyze image with OCR:', err);
-      set({ isAnalyzingOcr: false });
-      return null;
-    }
   }
 }));

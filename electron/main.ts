@@ -10,15 +10,13 @@ import {
   net,
   systemPreferences,
   shell,
-  nativeImage,
 } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { pathToFileURL } from 'url';
 import JSZip from 'jszip';
-import { createWorker } from 'tesseract.js';
-import type { SopProject, ErrorFaqItem, OcrAnalysisResult } from '../src/types/sop';
+import type { SopProject } from '../src/types/sop';
 
 // Register custom protocol for local asset streaming with CORS enabled
 protocol.registerSchemesAsPrivileged([
@@ -40,12 +38,9 @@ let isCapturing = false;
 let lastActiveProject: SopProject | null = null;
 let currentRetakeStepId: string | null = null;
 
-if (app.isPackaged) {
-  const hasSingleInstanceLock = app.requestSingleInstanceLock();
-  if (!hasSingleInstanceLock) {
-    appendRuntimeLog('[App] Another instance is already running in production - quitting');
-    app.quit();
-  }
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
 }
 
 function appendRuntimeLog(message: string, error?: unknown): void {
@@ -119,7 +114,6 @@ function getWorkspaceRoot(): string {
 
 const getAssetsDir = (): string => path.join(getWorkspaceRoot(), 'stepflow_assets');
 const getProjectsDir = (): string => path.join(getWorkspaceRoot(), 'projects');
-const getErrorCatalogDir = (): string => path.join(getWorkspaceRoot(), 'error_catalog');
 
 const recentlySavedByApp = new Set<string>();
 let projectWatcher: fs.FSWatcher | null = null;
@@ -184,194 +178,6 @@ function setupProjectsFileWatcher(): void {
 async function ensureDirectories(): Promise<void> {
   await fs.promises.mkdir(getAssetsDir(), { recursive: true });
   await fs.promises.mkdir(getProjectsDir(), { recursive: true });
-  await fs.promises.mkdir(getErrorCatalogDir(), { recursive: true });
-}
-
-interface SelectionRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-function requestSelectionRect(display: Electron.Display): Promise<SelectionRect | null> {
-  return new Promise((resolve) => {
-    const requestId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const submitChannel = `selection-rect-submit-${requestId}`;
-    const cancelChannel = `selection-rect-cancel-${requestId}`;
-
-    let resolved = false;
-    const finish = (value: SelectionRect | null) => {
-      if (resolved) return;
-      resolved = true;
-      ipcMain.removeAllListeners(submitChannel);
-      ipcMain.removeAllListeners(cancelChannel);
-      resolve(value);
-    };
-
-    const selectorWindow = new BrowserWindow({
-      x: display.bounds.x,
-      y: display.bounds.y,
-      width: display.bounds.width,
-      height: display.bounds.height,
-      frame: false,
-      transparent: true,
-      skipTaskbar: true,
-      alwaysOnTop: true,
-      movable: false,
-      resizable: false,
-      focusable: true,
-      show: false,
-      backgroundColor: '#00000001',
-      webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false,
-        sandbox: false,
-      },
-    });
-
-    const cleanupAndClose = () => {
-      try {
-        if (!selectorWindow.isDestroyed()) {
-          selectorWindow.close();
-        }
-      } catch {}
-    };
-
-    ipcMain.once(submitChannel, (_event, rect: SelectionRect) => {
-      finish(rect);
-      cleanupAndClose();
-    });
-
-    ipcMain.once(cancelChannel, () => {
-      finish(null);
-      cleanupAndClose();
-    });
-
-    selectorWindow.on('closed', () => {
-      finish(null);
-    });
-
-    const html = `
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <style>
-      html, body {
-        margin: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        cursor: crosshair;
-        background: rgba(15, 23, 42, 0.2);
-        user-select: none;
-      }
-      #hint {
-        position: fixed;
-        top: 14px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(15, 23, 42, 0.88);
-        color: #e2e8f0;
-        font-family: Segoe UI, Arial, sans-serif;
-        font-size: 12px;
-        padding: 8px 10px;
-        border-radius: 8px;
-        border: 1px solid rgba(148, 163, 184, 0.45);
-        pointer-events: none;
-      }
-      #selection {
-        position: fixed;
-        border: 2px solid #38bdf8;
-        background: rgba(56, 189, 248, 0.12);
-        display: none;
-        box-shadow: 0 0 0 99999px rgba(2, 6, 23, 0.4);
-      }
-    </style>
-  </head>
-  <body>
-    <div id="hint">Drag to capture a region. Press Esc to cancel.</div>
-    <div id="selection"></div>
-    <script>
-      const { ipcRenderer } = require('electron');
-      const submitChannel = ${JSON.stringify(submitChannel)};
-      const cancelChannel = ${JSON.stringify(cancelChannel)};
-      const selectionEl = document.getElementById('selection');
-      let dragging = false;
-      let startX = 0;
-      let startY = 0;
-      let currentX = 0;
-      let currentY = 0;
-
-      function rectFromPoints() {
-        const left = Math.min(startX, currentX);
-        const top = Math.min(startY, currentY);
-        const width = Math.abs(currentX - startX);
-        const height = Math.abs(currentY - startY);
-        return { x: left, y: top, width, height };
-      }
-
-      function renderRect() {
-        const r = rectFromPoints();
-        selectionEl.style.display = 'block';
-        selectionEl.style.left = r.x + 'px';
-        selectionEl.style.top = r.y + 'px';
-        selectionEl.style.width = r.width + 'px';
-        selectionEl.style.height = r.height + 'px';
-      }
-
-      window.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
-        dragging = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        currentX = e.clientX;
-        currentY = e.clientY;
-        renderRect();
-      });
-
-      window.addEventListener('mousemove', (e) => {
-        if (!dragging) return;
-        currentX = e.clientX;
-        currentY = e.clientY;
-        renderRect();
-      });
-
-      window.addEventListener('mouseup', (e) => {
-        if (!dragging) return;
-        dragging = false;
-        currentX = e.clientX;
-        currentY = e.clientY;
-        const rect = rectFromPoints();
-        if (rect.width < 4 || rect.height < 4) {
-          ipcRenderer.send(cancelChannel);
-          return;
-        }
-        ipcRenderer.send(submitChannel, rect);
-      });
-
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          ipcRenderer.send(cancelChannel);
-        }
-      });
-
-      window.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        ipcRenderer.send(cancelChannel);
-      });
-    </script>
-  </body>
-</html>
-`;
-
-    selectorWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-    selectorWindow.once('ready-to-show', () => {
-      selectorWindow.show();
-      selectorWindow.focus();
-    });
-  });
 }
 
 function loadRoute(win: BrowserWindow, route: string): void {
@@ -404,15 +210,6 @@ function applyWindowSecurity(win: BrowserWindow): void {
       return;
     }
     event.preventDefault();
-  });
-
-  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-    appendRuntimeLog(`[Renderer lvl=${level}] ${message} (${sourceId}:${line})`);
-    if (level >= 2) {
-      console.error(`[Renderer error] ${message} (${sourceId}:${line})`);
-    } else {
-      console.log(`[Renderer] ${message}`);
-    }
   });
 }
 
@@ -448,7 +245,7 @@ function createStudioWindow(): BrowserWindow {
     frame: process.platform === 'darwin' ? false : true,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: '#fafafa',
+    backgroundColor: '#0f172a',
     webPreferences: {
       preload: getPreloadPath(),
       contextIsolation: true,
@@ -522,8 +319,8 @@ function createOverlayWindow(): BrowserWindow {
   const enableRendererSandbox = process.platform !== 'win32';
 
   overlayWindow = new BrowserWindow({
-    width: 440,
-    height: 84,
+    width: 204,
+    height: 76,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -564,16 +361,13 @@ function createOverlayWindow(): BrowserWindow {
   return overlayWindow;
 }
 
-function setOverlayMode(mode: 'collapsed' | 'expanded' | 'preview' | 'error_match' | 'error_new' | 'search'): void {
+function setOverlayMode(mode: 'collapsed' | 'expanded' | 'preview'): void {
   if (!overlayWindow || overlayWindow.isDestroyed()) return;
 
-  const modeSizes: Record<'collapsed' | 'expanded' | 'preview' | 'error_match' | 'error_new' | 'search', { width: number; height: number }> = {
-    collapsed: { width: 440, height: 84 },
+  const modeSizes: Record<'collapsed' | 'expanded' | 'preview', { width: number; height: number }> = {
+    collapsed: { width: 204, height: 76 },
     expanded: { width: 380, height: 280 },
     preview: { width: 340, height: 180 },
-    error_match: { width: 380, height: 320 },
-    error_new: { width: 400, height: 420 },
-    search: { width: 540, height: 460 },
   };
 
   const target = modeSizes[mode] || modeSizes.collapsed;
@@ -659,47 +453,6 @@ async function performCapture(isRetake = false, mode: 'fullscreen' | 'selection'
     }
 
     let captureSuccess = false;
-    const cursorPoint = screen.getCursorScreenPoint();
-    const activeDisplay = screen.getDisplayNearestPoint(cursorPoint);
-    const scaleFactor = activeDisplay.scaleFactor || 1;
-    let selectedRectDip: SelectionRect | null = null;
-
-    appendRuntimeLog(
-      `[Capture] start mode=${mode} isRetake=${String(Boolean(isRetake || currentRetakeStepId))} displayId=${activeDisplay.id} cursor=(${cursorPoint.x},${cursorPoint.y}) displayBounds=(${activeDisplay.bounds.x},${activeDisplay.bounds.y},${activeDisplay.bounds.width}x${activeDisplay.bounds.height}) scale=${scaleFactor}`
-    );
-
-    if (mode === 'selection' && process.platform !== 'darwin') {
-      selectedRectDip = await requestSelectionRect(activeDisplay);
-      if (!selectedRectDip) {
-        appendRuntimeLog('[Capture] selection cancelled before screenshot');
-        if (isRetake || currentRetakeStepId) {
-          if (overlayWindow && !overlayWindow.isDestroyed()) {
-            overlayWindow.hide();
-          }
-          if (studioWindow && !studioWindow.isDestroyed()) {
-            if (studioWindow.isMinimized()) studioWindow.restore();
-            studioWindow.show();
-            studioWindow.focus();
-            studioWindow.webContents.send('studio-restored');
-          }
-          currentRetakeStepId = null;
-        } else {
-          if (overlayWasVisible && overlayWindow && !overlayWindow.isDestroyed()) {
-            overlayWindow.showInactive();
-          }
-          if (studioWasVisible && studioWindow && !studioWindow.isDestroyed()) {
-            if (studioWindow.isMinimized()) studioWindow.restore();
-            studioWindow.show();
-            studioWindow.focus();
-          }
-        }
-        return null;
-      }
-
-      appendRuntimeLog(
-        `[Capture] selection rect dip=(${selectedRectDip.x},${selectedRectDip.y},${selectedRectDip.width}x${selectedRectDip.height})`
-      );
-    }
 
     // Strategy 1 (macOS): Native screencapture CLI
     if (process.platform === 'darwin') {
@@ -753,12 +506,11 @@ async function performCapture(isRetake = false, mode: 'fullscreen' | 'selection'
     // Strategy 2: Electron desktopCapturer (for Windows, Linux, or macOS fallback)
     if (!captureSuccess) {
       try {
+        const cursorPoint = screen.getCursorScreenPoint();
+        const activeDisplay = screen.getDisplayNearestPoint(cursorPoint);
+        const scaleFactor = activeDisplay.scaleFactor || 1;
         const captureWidth = Math.round(activeDisplay.size.width * scaleFactor);
         const captureHeight = Math.round(activeDisplay.size.height * scaleFactor);
-
-        appendRuntimeLog(
-          `[Capture] desktopCapturer requested size=${captureWidth}x${captureHeight} mode=${mode}`
-        );
 
         const sources = await desktopCapturer.getSources({
           types: ['screen'],
@@ -778,42 +530,14 @@ async function performCapture(isRetake = false, mode: 'fullscreen' | 'selection'
             targetSource = sources[0];
           }
 
-          let imgBuffer = targetSource.thumbnail.toPNG();
+          const imgBuffer = targetSource.thumbnail.toPNG();
           if (imgBuffer && imgBuffer.length > 0) {
-            if (mode === 'selection' && selectedRectDip) {
-              const image = nativeImage.createFromBuffer(imgBuffer);
-              const imageSize = image.getSize();
-              const cropX = Math.max(0, Math.floor(selectedRectDip.x * scaleFactor));
-              const cropY = Math.max(0, Math.floor(selectedRectDip.y * scaleFactor));
-              const cropWidth = Math.min(
-                imageSize.width - cropX,
-                Math.max(1, Math.floor(selectedRectDip.width * scaleFactor))
-              );
-              const cropHeight = Math.min(
-                imageSize.height - cropY,
-                Math.max(1, Math.floor(selectedRectDip.height * scaleFactor))
-              );
-
-              if (cropWidth > 1 && cropHeight > 1) {
-                appendRuntimeLog(
-                  `[Capture] crop applied px=(${cropX},${cropY},${cropWidth}x${cropHeight}) source=${imageSize.width}x${imageSize.height}`
-                );
-                imgBuffer = image.crop({ x: cropX, y: cropY, width: cropWidth, height: cropHeight }).toPNG();
-              } else {
-                appendRuntimeLog(
-                  `[Capture] crop skipped due to tiny region px=(${cropX},${cropY},${cropWidth}x${cropHeight})`
-                );
-              }
-            }
-
             await fs.promises.writeFile(filePath, imgBuffer);
             captureSuccess = true;
-            appendRuntimeLog(`[Capture] saved file=${filePath}`);
           }
         }
       } catch (capturerErr) {
         console.warn('[Capture] desktopCapturer failed:', capturerErr);
-        appendRuntimeLog('[Capture] desktopCapturer failed', capturerErr);
       }
     }
 
@@ -920,7 +644,6 @@ async function performCapture(isRetake = false, mode: 'fullscreen' | 'selection'
     return capturePayload;
   } catch (error) {
     console.error('[Capture] Exception during screen capture:', error);
-    appendRuntimeLog('[Capture] exception', error);
     if (isRetake || currentRetakeStepId) {
       if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.hide();
@@ -949,11 +672,11 @@ async function performCapture(isRetake = false, mode: 'fullscreen' | 'selection'
 }
 
 function registerGlobalShortcuts(): void {
-  // Full screen capture shortcut: Cmd/Ctrl+Shift+S
-  const fullShortcut = 'CommandOrControl+Shift+S';
+  // Full screen capture shortcut: Cmd/Ctrl+Alt+S (avoids OS-wide "Save As" conflict)
+  const fullShortcut = 'CommandOrControl+Alt+S';
   const success = globalShortcut.register(fullShortcut, async () => {
     try {
-      await performCapture(Boolean(currentRetakeStepId), 'fullscreen');
+      await performCapture(false, 'fullscreen');
     } catch (err) {
       console.error('[Shortcut] Error in full screen shortcut capture:', err);
     }
@@ -963,11 +686,11 @@ function registerGlobalShortcuts(): void {
     console.warn(`[Shortcut] Registration failed for ${fullShortcut}`);
   }
 
-  // Area / Selection capture shortcut: Cmd/Ctrl+Shift+A
-  const selectionShortcut = 'CommandOrControl+Shift+A';
+  // Area / Selection capture shortcut: Cmd/Ctrl+Alt+A
+  const selectionShortcut = 'CommandOrControl+Alt+A';
   const selSuccess = globalShortcut.register(selectionShortcut, async () => {
     try {
-      await performCapture(Boolean(currentRetakeStepId), 'selection');
+      await performCapture(false, 'selection');
     } catch (err) {
       console.error('[Shortcut] Error in selection shortcut capture:', err);
     }
@@ -975,28 +698,6 @@ function registerGlobalShortcuts(): void {
 
   if (!selSuccess) {
     console.warn(`[Shortcut] Registration failed for ${selectionShortcut}`);
-  }
-
-  // Quick Search HUD shortcut: Cmd/Ctrl+Shift+F
-  const searchShortcut = 'CommandOrControl+Shift+F';
-  const searchSuccess = globalShortcut.register(searchShortcut, () => {
-    try {
-      if (studioWindow && !studioWindow.isDestroyed()) {
-        if (studioWindow.isMinimized()) studioWindow.restore();
-        studioWindow.show();
-        studioWindow.focus();
-        studioWindow.webContents.send('open-search-hud');
-      }
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayWindow.webContents.send('open-search-hud');
-      }
-    } catch (err) {
-      console.error('[Shortcut] Error in search HUD shortcut:', err);
-    }
-  });
-
-  if (!searchSuccess) {
-    console.warn(`[Shortcut] Registration failed for ${searchShortcut}`);
   }
 }
 
@@ -1012,272 +713,6 @@ async function showOpenDialogHelper(options: Electron.OpenDialogOptions): Promis
     return await dialog.showOpenDialog(studioWindow, options);
   }
   return await dialog.showOpenDialog(options);
-}
-
-// =========================================================
-let ocrWorkerInstance: any = null;
-let ocrWorkerInitPromise: Promise<any> | null = null;
-
-async function getOcrWorker(): Promise<any> {
-  if (ocrWorkerInstance) return ocrWorkerInstance;
-  if (ocrWorkerInitPromise) return await ocrWorkerInitPromise;
-
-  const appRoot = app.isPackaged ? process.resourcesPath : process.cwd();
-
-  ocrWorkerInitPromise = (async () => {
-    appendRuntimeLog(`[OCR] Initializing bundled Tesseract worker from ${appRoot}...`);
-    try {
-      const worker = await createWorker('eng', 1, {
-        langPath: appRoot,
-        cachePath: appRoot,
-        logger: (m) => {
-          if (m.status && m.progress === 1) {
-            appendRuntimeLog(`[OCR progress] ${m.status}: 100%`);
-          }
-        }
-      });
-      ocrWorkerInstance = worker;
-      appendRuntimeLog('[OCR] Tesseract worker ready');
-      return worker;
-    } catch (err) {
-      appendRuntimeLog('[OCR] Worker initialization failed', err);
-      ocrWorkerInitPromise = null;
-      throw err;
-    }
-  })();
-
-  try {
-    return await ocrWorkerInitPromise;
-  } catch (err) {
-    ocrWorkerInitPromise = null;
-    throw err;
-  }
-}
-
-function extractErrorCode(text: string): string | undefined {
-  if (!text) return undefined;
-  // 1. Hex codes: e.g. 0x80040115, 0x80070005
-  const hexMatch = text.match(/\b0x[0-9a-fA-F]{4,10}\b/);
-  if (hexMatch) return hexMatch[0];
-
-  // 2. ERR_ or ERROR_ prefixed: e.g. ERR_CONNECTION_TIMED_OUT
-  const errMatch = text.match(/\b(?:ERR|ERROR)[_-][A-Z0-9_-]{3,30}\b/i);
-  if (errMatch) return errMatch[0].toUpperCase();
-
-  // 3. Application error codes: e.g. SAP-1049, ORA-00942, HTTP-403
-  const appMatch = text.match(/\b[A-Z]{2,6}[-_][0-9]{3,6}\b/);
-  if (appMatch) return appMatch[0].toUpperCase();
-
-  // 4. Labeled code: "Error Code: 404"
-  const labeledMatch = text.match(/\b(?:Error\s*Code|Status\s*Code|Error\s*#|Code)[\s:#]+([0-9A-Za-z_-]{2,15})\b/i);
-  if (labeledMatch && labeledMatch[1]) return labeledMatch[1];
-
-  return undefined;
-}
-
-function extractErrorTitle(text: string, errorCode?: string): string {
-  if (!text || !text.trim()) return 'Unspecified Error';
-
-  const lines = text
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length >= 3 && !/^[^a-zA-Z0-9]+$/.test(l));
-
-  // Look for a line containing "error", "failed", "exception", "warning", "unable"
-  const triggerLine = lines.find((l) =>
-    /(error|failed|failure|exception|warning|unable|denied|cannot|timeout|problem)/i.test(l)
-  );
-
-  if (triggerLine) {
-    return triggerLine.length > 60 ? triggerLine.slice(0, 57) + '...' : triggerLine;
-  }
-
-  if (lines[0]) {
-    const first = lines[0];
-    return first.length > 60 ? first.slice(0, 57) + '...' : first;
-  }
-
-  return errorCode ? `Error ${errorCode}` : 'Detected Error Dialog';
-}
-
-function tokenize(text: string): Set<string> {
-  const words = text
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length >= 3);
-  return new Set(words);
-}
-
-function calculateFuzzyMatch(rawText: string, errorCode: string | undefined, item: ErrorFaqItem): number {
-  if (errorCode && item.errorCode && errorCode.toLowerCase() === item.errorCode.toLowerCase()) {
-    return 0.95;
-  }
-
-  const queryTokens = tokenize(rawText);
-  if (queryTokens.size === 0) return 0;
-
-  const itemTokens = tokenize(`${item.title} ${item.errorCode || ''} ${item.rawOcrText} ${item.tags.join(' ')}`);
-  if (itemTokens.size === 0) return 0;
-
-  let common = 0;
-  for (const token of queryTokens) {
-    if (itemTokens.has(token)) common++;
-  }
-
-  const similarity = (2 * common) / (queryTokens.size + itemTokens.size);
-  return Math.min(1, Math.max(0, similarity));
-}
-
-async function listErrorFaqItems(): Promise<ErrorFaqItem[]> {
-  try {
-    await ensureDirectories();
-    const catalogDir = getErrorCatalogDir();
-    const files = await fs.promises.readdir(catalogDir);
-    const jsonFiles = files.filter((f) => f.endsWith('.json') && !f.includes('.tmp'));
-    const items: ErrorFaqItem[] = [];
-
-    for (const file of jsonFiles) {
-      try {
-        const filePath = path.join(catalogDir, file);
-        const raw = await fs.promises.readFile(filePath, 'utf-8');
-        const item = JSON.parse(raw) as ErrorFaqItem;
-        if (item && item.id) items.push(item);
-      } catch (err) {
-        console.warn(`[ErrorCatalog] Failed to parse ${file}:`, err);
-      }
-    }
-
-    items.sort(
-      (a, b) =>
-        new Date(b.updatedAt || b.createdAt || 0).getTime() -
-        new Date(a.updatedAt || a.createdAt || 0).getTime()
-    );
-    return items;
-  } catch (err) {
-    console.error('[ErrorCatalog] Failed to list items:', err);
-    return [];
-  }
-}
-
-async function saveErrorFaqItem(item: ErrorFaqItem): Promise<boolean> {
-  try {
-    if (!item || !item.id) return false;
-    await ensureDirectories();
-    const safeId = item.id.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const catalogDir = getErrorCatalogDir();
-    const filePath = path.join(catalogDir, `err_${safeId}.json`);
-    const tempPath = path.join(catalogDir, `err_${safeId}.${Date.now()}.tmp`);
-
-    const now = new Date().toISOString();
-    if (!item.createdAt) item.createdAt = now;
-    item.updatedAt = now;
-
-    await fs.promises.writeFile(tempPath, JSON.stringify(item, null, 2), 'utf-8');
-    await fs.promises.rename(tempPath, filePath);
-    return true;
-  } catch (err) {
-    console.error('[ErrorCatalog] Failed to save item:', err);
-    return false;
-  }
-}
-
-async function deleteErrorFaqItem(id: string): Promise<boolean> {
-  try {
-    if (!id) return false;
-    const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const filePath = path.join(getErrorCatalogDir(), `err_${safeId}.json`);
-    if (fs.existsSync(filePath)) {
-      await fs.promises.unlink(filePath);
-      return true;
-    }
-    return false;
-  } catch (err) {
-    console.error('[ErrorCatalog] Failed to delete item:', err);
-    return false;
-  }
-}
-
-async function importPastedImageHelper(base64Data: string): Promise<string> {
-  await ensureDirectories();
-  const raw = base64Data.replace(/^data:image\/\w+;base64,/, '');
-  const buffer = Buffer.from(raw, 'base64');
-  const filename = `paste_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.png`;
-  const filePath = path.join(getAssetsDir(), filename);
-  await fs.promises.writeFile(filePath, buffer);
-  return filePath;
-}
-
-async function analyzeImageWithOcr(imagePathOrBase64: string): Promise<OcrAnalysisResult> {
-  await ensureDirectories();
-  const assetsDir = getAssetsDir();
-
-  let targetFilePath = imagePathOrBase64;
-  let imageBuffer: Buffer | null = null;
-
-  if (imagePathOrBase64.startsWith('data:image/')) {
-    const base64Data = imagePathOrBase64.replace(/^data:image\/\w+;base64,/, '');
-    imageBuffer = Buffer.from(base64Data, 'base64');
-    const filename = `error_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.png`;
-    targetFilePath = path.join(assetsDir, filename);
-    await fs.promises.writeFile(targetFilePath, imageBuffer);
-  } else if (!fs.existsSync(imagePathOrBase64)) {
-    throw new Error(`File not found: ${imagePathOrBase64}`);
-  } else {
-    if (!imagePathOrBase64.startsWith(assetsDir)) {
-      const ext = path.extname(imagePathOrBase64) || '.png';
-      const filename = `error_${Date.now()}_${Math.random().toString(36).substring(2, 7)}${ext}`;
-      const dest = path.join(assetsDir, filename);
-      await fs.promises.copyFile(imagePathOrBase64, dest);
-      targetFilePath = dest;
-    }
-    imageBuffer = await fs.promises.readFile(targetFilePath);
-  }
-
-  appendRuntimeLog(`[OCR] Starting recognition on ${targetFilePath}`);
-  let rawText = '';
-  try {
-    const workerPromise = getOcrWorker();
-    const timeoutWorker = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('OCR worker init timeout (10s)')), 10000)
-    );
-    const worker = await Promise.race([workerPromise, timeoutWorker]) as any;
-
-    const recognizePromise = worker.recognize(imageBuffer || targetFilePath);
-    const timeoutRecognize = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('OCR recognize timeout (10s)')), 10000)
-    );
-    const result = await Promise.race([recognizePromise, timeoutRecognize]) as any;
-
-    rawText = (result?.data?.text || '').trim();
-    appendRuntimeLog(`[OCR] Completed recognition, extracted ${rawText.length} chars`);
-  } catch (ocrErr) {
-    appendRuntimeLog('[OCR] Error or timeout during recognition', ocrErr);
-    console.warn('[OCR] Recognition error or timeout:', ocrErr);
-  }
-
-  const detectedErrorCode = extractErrorCode(rawText);
-  const detectedTitle = extractErrorTitle(rawText, detectedErrorCode);
-
-  const items = await listErrorFaqItems();
-  let bestMatch: { item: ErrorFaqItem; confidence: number } | undefined = undefined;
-
-  for (const item of items) {
-    const score = calculateFuzzyMatch(rawText, detectedErrorCode, item);
-    if (score >= 0.45) {
-      if (!bestMatch || score > bestMatch.confidence) {
-        bestMatch = { item, confidence: Math.round(score * 100) / 100 };
-      }
-    }
-  }
-
-  return {
-    rawText,
-    detectedTitle,
-    detectedErrorCode,
-    imagePath: targetFilePath,
-    bestMatch,
-  };
 }
 
 function registerIpcHandlers(): void {
@@ -1390,32 +825,8 @@ function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.on(
-    'set-overlay-size',
-    (_event, mode: 'collapsed' | 'expanded' | 'preview' | 'error_match' | 'error_new' | 'search') => {
-      setOverlayMode(mode);
-    }
-  );
-
-  // Error & FAQ Knowledge Base + OCR
-  ipcMain.handle('analyze-error-image', async (_event, imagePathOrBase64: string): Promise<OcrAnalysisResult> => {
-    return await analyzeImageWithOcr(imagePathOrBase64);
-  });
-
-  ipcMain.handle('list-error-faq', async (): Promise<ErrorFaqItem[]> => {
-    return await listErrorFaqItems();
-  });
-
-  ipcMain.handle('save-error-faq', async (_event, item: ErrorFaqItem): Promise<boolean> => {
-    return await saveErrorFaqItem(item);
-  });
-
-  ipcMain.handle('delete-error-faq', async (_event, id: string): Promise<boolean> => {
-    return await deleteErrorFaqItem(id);
-  });
-
-  ipcMain.handle('import-pasted-image', async (_event, base64Data: string): Promise<string> => {
-    return await importPastedImageHelper(base64Data);
+  ipcMain.on('set-overlay-size', (_event, mode: 'collapsed' | 'expanded' | 'preview') => {
+    setOverlayMode(mode);
   });
 
   // Project I/O
@@ -1425,40 +836,20 @@ function registerIpcHandlers(): void {
       const projectsDir = getProjectsDir();
       const files = await fs.promises.readdir(projectsDir);
       const jsonFiles = files.filter((f) => f.endsWith('.json'));
-      const projectMap = new Map<string, { project: SopProject; file: string; mtime: number }>();
+      const projects: SopProject[] = [];
 
       for (const file of jsonFiles) {
         try {
           const filePath = path.join(projectsDir, file);
-          const stat = await fs.promises.stat(filePath);
           const raw = await fs.promises.readFile(filePath, 'utf-8');
           const project = JSON.parse(raw) as SopProject;
           if (project && project.id) {
-            const existing = projectMap.get(project.id);
-            const projectTime = new Date(project.updatedAt || project.createdAt || 0).getTime() || stat.mtimeMs;
-            if (!existing) {
-              projectMap.set(project.id, { project, file, mtime: projectTime });
-            } else {
-              if (projectTime >= existing.mtime) {
-                // If the old file was a legacy name without proj_, remove it
-                if (!existing.file.startsWith('proj_') && file.startsWith('proj_')) {
-                  fs.promises.unlink(path.join(projectsDir, existing.file)).catch(() => {});
-                }
-                projectMap.set(project.id, { project, file, mtime: projectTime });
-              } else {
-                // If this file is older and has legacy name, remove it
-                if (!file.startsWith('proj_') && existing.file.startsWith('proj_')) {
-                  fs.promises.unlink(filePath).catch(() => {});
-                }
-              }
-            }
+            projects.push(project);
           }
         } catch (err) {
           console.warn(`[ProjectIO] Could not parse project file ${file}:`, err);
         }
       }
-
-      const projects = Array.from(projectMap.values()).map((v) => v.project);
 
       projects.sort((a, b) => {
         const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();

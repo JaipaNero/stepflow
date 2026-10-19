@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Maximize2,
+  Sparkles,
   Camera,
   Upload,
   Info,
@@ -27,8 +28,6 @@ import { AnnotationToolbar, ToolType } from '../canvas/AnnotationToolbar';
 import { KonvaCanvas, KonvaCanvasHandle } from '../canvas/KonvaCanvas';
 import { CoverPageStudio } from './CoverPageStudio';
 import { TableOfContentsStudio } from './TableOfContentsStudio';
-import { RichInstructionsEditor } from './RichInstructionsEditor';
-import { renderMarkdownBlocks } from '../../utils/markdownHelper';
 
 interface CenterViewportProps {
   onTriggerCapture?: (mode?: 'fullscreen' | 'selection') => void;
@@ -49,6 +48,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
     activeProject,
     activeStepId,
     updateStep,
+    updateBeautifySettings,
     retakeStepImage,
     setStepAnnotations
   } = useSopStore();
@@ -74,8 +74,6 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
 
   const canvasRef = useRef<KonvaCanvasHandle | null>(null);
-  const isMac = typeof window !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || window.navigator.userAgent);
-  const cmdLabel = isMac ? 'Cmd' : 'Ctrl';
 
   const currentStep = activeProject?.steps.find((s) => s.id === activeStepId);
 
@@ -451,41 +449,75 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
     }
   };
 
+  // Simple clean markdown parser for text step preview
+  const renderSimpleMarkdown = (content: string) => {
+    return content.split('\n\n').map((block, idx) => {
+      const trimmed = block.trim();
+      if (trimmed.startsWith('### ')) {
+        return (
+          <h3 key={idx} className="text-base font-semibold text-zinc-900 dark:text-zinc-100 my-2">
+            {trimmed.replace('### ', '')}
+          </h3>
+        );
+      }
+      if (trimmed.startsWith('## ')) {
+        return (
+          <h2 key={idx} className="text-lg font-bold text-zinc-900 dark:text-zinc-100 my-3">
+            {trimmed.replace('## ', '')}
+          </h2>
+        );
+      }
+      if (trimmed.startsWith('# ')) {
+        return (
+          <h1 key={idx} className="text-xl font-bold text-zinc-900 dark:text-zinc-100 my-4">
+            {trimmed.replace('# ', '')}
+          </h1>
+        );
+      }
+      if (trimmed.startsWith('> ')) {
+        return (
+          <blockquote
+            key={idx}
+            className="pl-3 border-l-2 border-zinc-400 dark:border-zinc-600 text-xs text-zinc-600 dark:text-zinc-400 italic my-2"
+          >
+            {trimmed.replace('> ', '')}
+          </blockquote>
+        );
+      }
+      if (trimmed.match(/^\d+\.\s/)) {
+        const lines = trimmed.split('\n');
+        return (
+          <ol key={idx} className="list-decimal pl-5 space-y-1 my-2 text-xs text-zinc-700 dark:text-zinc-300">
+            {lines.map((l, li) => (
+              <li key={li}>{l.replace(/^\d+\.\s*/, '')}</li>
+            ))}
+          </ol>
+        );
+      }
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        const lines = trimmed.split('\n');
+        return (
+          <ul key={idx} className="list-disc pl-5 space-y-1 my-2 text-xs text-zinc-700 dark:text-zinc-300">
+            {lines.map((l, li) => (
+              <li key={li}>{l.replace(/^[-*]\s*/, '')}</li>
+            ))}
+          </ul>
+        );
+      }
+      return (
+        <p key={idx} className="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300 my-2">
+          {trimmed}
+        </p>
+      );
+    });
+  };
+
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
 
   if (activeStepId === 'cover') {
     return (
       <div className="flex-1 flex flex-col bg-zinc-100/70 dark:bg-zinc-950/80 overflow-hidden relative">
-        {(!leftOpen || !rightOpen) && (
-          <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-900/90 flex items-center justify-between text-xs select-none shrink-0 z-10">
-            <div className="flex items-center gap-1.5">
-              {!leftOpen && onOpenLeft && (
-                <button
-                  type="button"
-                  onClick={onOpenLeft}
-                  className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer mr-0.5"
-                  title={`Expand Step Outline (${cmdLabel}+B)`}
-                >
-                  <PanelLeftOpen className="w-4 h-4" />
-                </button>
-              )}
-              <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-[11px] uppercase tracking-wider">
-                Front Cover Page
-              </span>
-            </div>
-            {!rightOpen && onOpenRight && (
-              <button
-                type="button"
-                onClick={onOpenRight}
-                className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer ml-0.5"
-                title={`Expand Step Inspector (${cmdLabel}+I)`}
-              >
-                <PanelRightOpen className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        )}
         <CoverPageStudio />
       </div>
     );
@@ -494,35 +526,6 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
   if (activeStepId === 'index') {
     return (
       <div className="flex-1 flex flex-col bg-zinc-100/70 dark:bg-zinc-950/80 overflow-hidden relative">
-        {(!leftOpen || !rightOpen) && (
-          <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-900/90 flex items-center justify-between text-xs select-none shrink-0 z-10">
-            <div className="flex items-center gap-1.5">
-              {!leftOpen && onOpenLeft && (
-                <button
-                  type="button"
-                  onClick={onOpenLeft}
-                  className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer mr-0.5"
-                  title={`Expand Step Outline (${cmdLabel}+B)`}
-                >
-                  <PanelLeftOpen className="w-4 h-4" />
-                </button>
-              )}
-              <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-[11px] uppercase tracking-wider">
-                Table of Contents
-              </span>
-            </div>
-            {!rightOpen && onOpenRight && (
-              <button
-                type="button"
-                onClick={onOpenRight}
-                className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer ml-0.5"
-                title={`Expand Step Inspector (${cmdLabel}+I)`}
-              >
-                <PanelRightOpen className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        )}
         <TableOfContentsStudio />
       </div>
     );
@@ -530,34 +533,8 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
 
   if (!currentStep) {
     return (
-      <div className="flex-1 flex flex-col bg-zinc-100/70 dark:bg-zinc-950/80 overflow-hidden relative select-none">
-        {(!leftOpen || !rightOpen) && (
-          <div className="h-10 px-3.5 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-900/90 flex items-center justify-between text-xs shrink-0 z-10">
-            {!leftOpen && onOpenLeft ? (
-              <button
-                type="button"
-                onClick={onOpenLeft}
-                className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer mr-0.5"
-                title={`Expand Step Outline (${cmdLabel}+B)`}
-              >
-                <PanelLeftOpen className="w-4 h-4" />
-              </button>
-            ) : <div />}
-            {!rightOpen && onOpenRight && (
-              <button
-                type="button"
-                onClick={onOpenRight}
-                className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer ml-0.5"
-                title={`Expand Step Inspector (${cmdLabel}+I)`}
-              >
-                <PanelRightOpen className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        )}
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-zinc-400 text-xs">
-          Select a step from the outline or customize the front cover page.
-        </div>
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-zinc-100/70 dark:bg-zinc-950/80 text-zinc-400 text-xs select-none">
+        Select a step from the outline or customize the front cover page.
       </div>
     );
   }
@@ -571,7 +548,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
             <button
               onClick={onOpenLeft}
               className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer mr-0.5"
-              title={`Expand Step Outline (${cmdLabel}+B)`}
+              title="Expand Step Outline (Cmd+B)"
             >
               <PanelLeftOpen className="w-4 h-4" />
             </button>
@@ -584,6 +561,21 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
         <div className="flex items-center gap-1.5">
           {currentStep.type === 'screenshot' && (
             <>
+              {/* Beautify quick switch (Icon-Only) */}
+              <button
+                onClick={() => updateBeautifySettings({ enabled: !beautify.enabled })}
+                className={`p-1.5 rounded transition-colors cursor-pointer ${
+                  beautify.enabled
+                    ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs'
+                    : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                }`}
+                title="Toggle Beautify Frame"
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
+
+              <div className="h-3.5 w-px bg-zinc-200 dark:bg-zinc-800 mx-0.5" />
+
               {/* Interactive Zoom Bar: Stepper + Scrub + Popover */}
               <div ref={zoomMenuRef} className="relative flex items-center bg-zinc-100 dark:bg-zinc-800/80 rounded-lg p-0.5 border border-zinc-200/80 dark:border-zinc-700/60">
                 {/* Zoom Out Button */}
@@ -592,7 +584,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                   onClick={handleZoomOut}
                   disabled={zoomPercent <= 25}
                   className="p-1 rounded text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/70 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
-                  title={`Zoom Out (${cmdLabel} -)`}
+                  title="Zoom Out (Cmd -)"
                 >
                   <Minus className="w-3 h-3" />
                 </button>
@@ -615,7 +607,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                   onClick={handleZoomIn}
                   disabled={zoomPercent >= 200}
                   className="p-1 rounded text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/70 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
-                  title={`Zoom In (${cmdLabel} +)`}
+                  title="Zoom In (Cmd +)"
                 >
                   <Plus className="w-3 h-3" />
                 </button>
@@ -629,7 +621,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                       ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100'
                       : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
                   }`}
-                  title={`Reset to 75% (${cmdLabel} 0)`}
+                  title="Reset to 75% (Cmd 0)"
                 >
                   <Maximize2 className="w-3 h-3" />
                 </button>
@@ -690,7 +682,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                     </div>
 
                     <div className="text-[10px] text-zinc-400 dark:text-zinc-500 pt-1 border-t border-zinc-100 dark:border-zinc-800 text-center">
-                      Tip: Drag badge up/down or use {cmdLabel} + / -
+                      Tip: Drag badge up/down or use Cmd + / -
                     </div>
                   </div>
                 )}
@@ -729,7 +721,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
               <button
                 onClick={onOpenRight}
                 className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer ml-0.5"
-                title={`Expand Step Inspector (${cmdLabel}+I)`}
+                title="Expand Step Inspector (Cmd+I)"
               >
                 <PanelRightOpen className="w-4 h-4" />
               </button>
@@ -833,7 +825,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                       if (onTriggerCapture) onTriggerCapture('fullscreen');
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-medium hover:bg-zinc-800 transition-colors cursor-pointer"
-                    title={`Capture full screen (${cmdLabel}+Shift+S)`}
+                    title="Capture full screen (Cmd+Shift+S)"
                   >
                     <Camera className="w-3.5 h-3.5" />
                     <span>Capture Screen</span>
@@ -843,7 +835,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                       if (onTriggerCapture) onTriggerCapture('selection');
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-amber-500/40 hover:border-amber-500/80 bg-amber-500/10 text-amber-500 dark:text-amber-400 text-xs font-medium transition-colors cursor-pointer"
-                    title={`Capture selected area (${cmdLabel}+Shift+A)`}
+                    title="Capture selected area (Cmd+Shift+A)"
                   >
                     <Crop className="w-3.5 h-3.5" />
                     <span>Capture Selection</span>
@@ -898,14 +890,16 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                 </div>
 
                 <div className="flex-1 flex flex-col">
-                  <RichInstructionsEditor
+                  <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-wider mb-1">
+                    Markdown Instructions &amp; Documentation
+                  </label>
+                  <textarea
                     value={currentStep.description}
-                    onChange={(newDesc) =>
-                      updateStep(currentStep.id, { description: newDesc })
+                    onChange={(e) =>
+                      updateStep(currentStep.id, { description: e.target.value })
                     }
                     placeholder="Write detailed instructions using standard Markdown (# headers, - lists, > blockquotes)..."
-                    minHeight="260px"
-                    label="Markdown Instructions & Documentation"
+                    className="w-full flex-1 min-h-[260px] p-3 text-xs font-mono rounded-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-none leading-relaxed"
                   />
                 </div>
               </div>
@@ -922,7 +916,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                 </div>
 
                 <div className="flex-1 prose dark:prose-invert max-w-none">
-                  {renderMarkdownBlocks(currentStep.description || '*No instructions provided yet.*')}
+                  {renderSimpleMarkdown(currentStep.description || '*No instructions provided yet.*')}
                 </div>
 
                 {currentStep.callout && currentStep.callout.text && (

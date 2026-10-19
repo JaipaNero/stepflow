@@ -150,6 +150,10 @@ export const StudioLayout: React.FC<StudioLayoutProps> = ({ onTriggerCapture }) 
       {/* Top Header with streamlined icons and layout controls */}
       <StudioHeader
         onTriggerCapture={handleCapture}
+        leftOpen={leftOpen}
+        rightOpen={rightOpen}
+        onToggleLeft={() => setLeftOpen((prev) => !prev)}
+        onToggleRight={() => setRightOpen((prev) => !prev)}
       />
 
       {/* 3-Pane Adjustable & Collapsible Editor Layout */}
@@ -160,7 +164,6 @@ export const StudioLayout: React.FC<StudioLayoutProps> = ({ onTriggerCapture }) 
             <StepOutline
               width={leftWidth}
               onCaptureScreenshot={handleCapture}
-              onToggleCollapse={() => setLeftOpen(false)}
             />
             {/* Left Resizer Divider */}
             <div
@@ -192,7 +195,6 @@ export const StudioLayout: React.FC<StudioLayoutProps> = ({ onTriggerCapture }) 
             <StepInspector
               width={rightWidth}
               onTriggerCapture={handleCapture}
-              onToggleCollapse={() => setRightOpen(false)}
             />
           </>
         )}

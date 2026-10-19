@@ -10,6 +10,8 @@ import {
   FileSpreadsheet,
   Presentation,
   CheckCircle2,
+  PanelLeft,
+  PanelRight,
   Crop,
   FileText,
   Package
@@ -20,10 +22,18 @@ import { exportToPdf, exportToPptx, exportToHtml, exportToMarkdown } from '../..
 
 interface StudioHeaderProps {
   onTriggerCapture?: (mode?: 'fullscreen' | 'selection') => void;
+  leftOpen?: boolean;
+  rightOpen?: boolean;
+  onToggleLeft?: () => void;
+  onToggleRight?: () => void;
 }
 
 export const StudioHeader: React.FC<StudioHeaderProps> = ({
-  onTriggerCapture
+  onTriggerCapture,
+  leftOpen = true,
+  rightOpen = true,
+  onToggleLeft,
+  onToggleRight
 }) => {
   const {
     activeProject,
@@ -147,7 +157,6 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
   };
 
   const isMac = typeof window !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || window.navigator.userAgent);
-  const cmdLabel = isMac ? 'Cmd' : 'Ctrl';
 
   const statusColors = {
     draft: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700',
@@ -163,7 +172,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
 
   return (
     <header className={`titlebar-drag h-12 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm ${isMac ? 'pl-20' : 'pl-3'} pr-3 flex items-center justify-between select-none relative z-50 shrink-0`}>
-      {/* Left Toolbar: Back & Title */}
+      {/* Left Toolbar: Back, Panel Toggle & Title */}
       <div className="titlebar-no-drag flex items-center gap-2">
         <button
           onClick={() => {
@@ -175,6 +184,20 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
+
+        {onToggleLeft && (
+          <button
+            onClick={onToggleLeft}
+            className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+              leftOpen
+                ? 'text-zinc-700 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800'
+                : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+            }`}
+            title={leftOpen ? "Collapse Step Outline (Cmd+B)" : "Expand Step Outline (Cmd+B)"}
+          >
+            <PanelLeft className="w-4 h-4" />
+          </button>
+        )}
 
         <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-0.5" />
 
@@ -260,7 +283,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
           onClick={(e) => handleRetakeActive('fullscreen', e)}
           disabled={!activeStepId}
           className="p-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors disabled:opacity-30 cursor-pointer"
-          title={`Retake full screen for current step (${cmdLabel}+Shift+S)`}
+          title="Retake full screen for current step (Cmd+Shift+S)"
         >
           <Camera className="w-4 h-4" />
         </button>
@@ -270,7 +293,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
           onClick={(e) => handleRetakeActive('selection', e)}
           disabled={!activeStepId}
           className="p-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-amber-500/90 hover:text-amber-500 transition-colors disabled:opacity-30 cursor-pointer"
-          title={`Retake selected area for current step (${cmdLabel}+Shift+A)`}
+          title="Retake selected area for current step (Cmd+Shift+A)"
         >
           <Crop className="w-4 h-4" />
         </button>
@@ -334,6 +357,23 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
             </>
           )}
         </div>
+
+        {/* Right Inspector Panel Toggle */}
+        {onToggleRight && (
+          <button
+            onClick={onToggleRight}
+            className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+              rightOpen
+                ? 'text-zinc-700 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800'
+                : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+            }`}
+            title={rightOpen ? "Collapse Step Inspector (Cmd+I)" : "Expand Step Inspector (Cmd+I)"}
+          >
+            <PanelRight className="w-4 h-4" />
+          </button>
+        )}
+
+        <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-0.5" />
 
         {/* Minimize to Dot Button (Icon-Only) */}
         <button

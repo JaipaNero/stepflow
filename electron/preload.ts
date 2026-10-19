@@ -26,7 +26,7 @@ const electronAPI: IpcBridge = {
   closeOverlay: (): void => {
     ipcRenderer.send('close-overlay');
   },
-  setOverlaySize: (mode: 'collapsed' | 'expanded' | 'preview' | 'error_match' | 'error_new' | 'search'): void => {
+  setOverlaySize: (mode: 'collapsed' | 'expanded' | 'preview'): void => {
     ipcRenderer.send('set-overlay-size', mode);
   },
   onStudioRestored: (callback: () => void): (() => void) => {
@@ -89,30 +89,6 @@ const electronAPI: IpcBridge = {
     ipcRenderer.on('project-file-changed', handler);
     return () => {
       ipcRenderer.removeListener('project-file-changed', handler);
-    };
-  },
-
-  // Error & FAQ Knowledge Base + OCR
-  analyzeErrorImage: (imagePathOrBase64: string) => {
-    return ipcRenderer.invoke('analyze-error-image', imagePathOrBase64);
-  },
-  listErrorFaq: () => {
-    return ipcRenderer.invoke('list-error-faq');
-  },
-  saveErrorFaq: (item) => {
-    return ipcRenderer.invoke('save-error-faq', item);
-  },
-  deleteErrorFaq: (id: string) => {
-    return ipcRenderer.invoke('delete-error-faq', id);
-  },
-  importPastedImage: (base64Data: string) => {
-    return ipcRenderer.invoke('import-pasted-image', base64Data);
-  },
-  onOpenSearchHud: (callback: () => void) => {
-    const handler = () => callback();
-    ipcRenderer.on('open-search-hud', handler);
-    return () => {
-      ipcRenderer.removeListener('open-search-hud', handler);
     };
   },
 
