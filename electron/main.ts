@@ -402,6 +402,15 @@ function applyWindowSecurity(win: BrowserWindow): void {
     }
     event.preventDefault();
   });
+
+  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    appendRuntimeLog(`[Renderer lvl=${level}] ${message} (${sourceId}:${line})`);
+    if (level >= 2) {
+      console.error(`[Renderer error] ${message} (${sourceId}:${line})`);
+    } else {
+      console.log(`[Renderer] ${message}`);
+    }
+  });
 }
 
 function getPreloadPath(): string {
