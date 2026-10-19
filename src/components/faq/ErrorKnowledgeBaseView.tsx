@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  Search,
   Plus,
   Copy,
   Check,
@@ -12,17 +11,18 @@ import { useSopStore } from '../../store/useSopStore';
 import { ErrorFaqItem } from '../../types/sop';
 
 interface ErrorKnowledgeBaseViewProps {
+  searchQuery: string;
   onAddNew: () => void;
   onEditItem: (item: ErrorFaqItem) => void;
 }
 
 export const ErrorKnowledgeBaseView: React.FC<ErrorKnowledgeBaseViewProps> = ({
+  searchQuery,
   onAddNew,
   onEditItem,
 }) => {
   const { errorFaqItems, loadErrorFaq, deleteErrorFaqItem } = useSopStore();
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -80,26 +80,6 @@ export const ErrorKnowledgeBaseView: React.FC<ErrorKnowledgeBaseViewProps> = ({
 
   return (
     <div className="flex-1 max-w-6xl w-full mx-auto p-6 md:p-8 flex flex-col animate-fadeIn">
-      {/* Search & Statistics Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search error solutions by title, error code, symptoms, or tags..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 transition-all"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-          <span>
-            {filteredItems.length}{' '}
-            {filteredItems.length === 1 ? 'solution' : 'solutions'}
-          </span>
-        </div>
-      </div>
 
       {/* Tag Filter Pills */}
       {allTags.length > 0 && (
@@ -150,12 +130,11 @@ export const ErrorKnowledgeBaseView: React.FC<ErrorKnowledgeBaseViewProps> = ({
             <button
               type="button"
               onClick={() => {
-                setSearchQuery('');
                 setSelectedTag(null);
               }}
               className="text-xs text-zinc-700 dark:text-zinc-300 underline font-medium cursor-pointer"
             >
-              Clear filters
+              Clear tag filter
             </button>
           ) : (
             <button
