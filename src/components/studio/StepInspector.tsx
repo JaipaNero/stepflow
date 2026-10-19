@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useSopStore } from '../../store/useSopStore';
 import { CalloutType, DEFAULT_COVER_PAGE_SETTINGS } from '../../types/sop';
+import { RichInstructionsEditor } from './RichInstructionsEditor';
 
 interface StepInspectorProps {
   onTriggerCapture?: (mode?: 'fullscreen' | 'selection') => void;
@@ -358,19 +359,13 @@ export const StepInspector: React.FC<StepInspectorProps> = ({
           />
         </div>
 
-        {/* Step Instructions / Notes Textarea */}
-        <div>
-          <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">
-            Instructions &amp; Context
-          </label>
-          <textarea
-            rows={4}
-            value={currentStep.description}
-            onChange={(e) => updateStep(currentStep.id, { description: e.target.value })}
-            placeholder="Provide context or guidance for this step..."
-            className="w-full px-2.5 py-1.5 rounded-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-none leading-relaxed"
-          />
-        </div>
+        {/* Step Instructions / Notes Rich Text Editor */}
+        <RichInstructionsEditor
+          value={currentStep.description}
+          onChange={(newDesc) => updateStep(currentStep.id, { description: newDesc })}
+          placeholder="Provide context or guidance for this step..."
+          rows={4}
+        />
 
         {/* Callout Badge Selector (Icon-Based with Clear Tooltips) */}
         <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
