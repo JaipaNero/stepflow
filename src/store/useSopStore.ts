@@ -507,7 +507,8 @@ export const useSopStore = create<SopState>((set, get) => ({
         ? {
             originalImagePath: imagePath,
             dimensions: { width: 1280, height: 720 },
-            annotations: []
+            annotations: [],
+            annotatedCachePath: undefined,
           }
         : undefined
     };
@@ -718,7 +719,8 @@ export const useSopStore = create<SopState>((set, get) => ({
           image: {
             originalImagePath: newImagePath,
             dimensions: s.image?.dimensions || { width: 1280, height: 720 },
-            annotations: s.image?.annotations || []
+            annotations: s.image?.annotations || [],
+            annotatedCachePath: undefined,
           }
         };
       }
@@ -752,7 +754,8 @@ export const useSopStore = create<SopState>((set, get) => ({
           ...s,
           image: {
             ...s.image,
-            annotations
+            annotations,
+            annotatedCachePath: undefined,
           }
         };
       }
