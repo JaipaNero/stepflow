@@ -74,6 +74,8 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
 
   const canvasRef = useRef<KonvaCanvasHandle | null>(null);
+  const isMac = typeof window !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || window.navigator.userAgent);
+  const cmdLabel = isMac ? 'Cmd' : 'Ctrl';
 
   const currentStep = activeProject?.steps.find((s) => s.id === activeStepId);
 
@@ -548,7 +550,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
             <button
               onClick={onOpenLeft}
               className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer mr-0.5"
-              title="Expand Step Outline (Cmd+B)"
+              title={`Expand Step Outline (${cmdLabel}+B)`}
             >
               <PanelLeftOpen className="w-4 h-4" />
             </button>
@@ -584,7 +586,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                   onClick={handleZoomOut}
                   disabled={zoomPercent <= 25}
                   className="p-1 rounded text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/70 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
-                  title="Zoom Out (Cmd -)"
+                  title={`Zoom Out (${cmdLabel} -)`}
                 >
                   <Minus className="w-3 h-3" />
                 </button>
@@ -607,7 +609,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                   onClick={handleZoomIn}
                   disabled={zoomPercent >= 200}
                   className="p-1 rounded text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/70 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
-                  title="Zoom In (Cmd +)"
+                  title={`Zoom In (${cmdLabel} +)`}
                 >
                   <Plus className="w-3 h-3" />
                 </button>
@@ -621,7 +623,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                       ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100'
                       : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
                   }`}
-                  title="Reset to 75% (Cmd 0)"
+                  title={`Reset to 75% (${cmdLabel} 0)`}
                 >
                   <Maximize2 className="w-3 h-3" />
                 </button>
@@ -682,7 +684,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                     </div>
 
                     <div className="text-[10px] text-zinc-400 dark:text-zinc-500 pt-1 border-t border-zinc-100 dark:border-zinc-800 text-center">
-                      Tip: Drag badge up/down or use Cmd + / -
+                      Tip: Drag badge up/down or use {cmdLabel} + / -
                     </div>
                   </div>
                 )}
@@ -721,7 +723,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
               <button
                 onClick={onOpenRight}
                 className="p-1 rounded text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer ml-0.5"
-                title="Expand Step Inspector (Cmd+I)"
+                title={`Expand Step Inspector (${cmdLabel}+I)`}
               >
                 <PanelRightOpen className="w-4 h-4" />
               </button>
@@ -825,7 +827,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                       if (onTriggerCapture) onTriggerCapture('fullscreen');
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-medium hover:bg-zinc-800 transition-colors cursor-pointer"
-                    title="Capture full screen (Cmd+Shift+S)"
+                    title={`Capture full screen (${cmdLabel}+Shift+S)`}
                   >
                     <Camera className="w-3.5 h-3.5" />
                     <span>Capture Screen</span>
@@ -835,7 +837,7 @@ export const CenterViewport: React.FC<CenterViewportProps> = ({
                       if (onTriggerCapture) onTriggerCapture('selection');
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-amber-500/40 hover:border-amber-500/80 bg-amber-500/10 text-amber-500 dark:text-amber-400 text-xs font-medium transition-colors cursor-pointer"
-                    title="Capture selected area (Cmd+Shift+A)"
+                    title={`Capture selected area (${cmdLabel}+Shift+A)`}
                   >
                     <Crop className="w-3.5 h-3.5" />
                     <span>Capture Selection</span>

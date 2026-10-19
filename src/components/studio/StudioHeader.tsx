@@ -157,6 +157,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
   };
 
   const isMac = typeof window !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || window.navigator.userAgent);
+  const cmdLabel = isMac ? 'Cmd' : 'Ctrl';
 
   const statusColors = {
     draft: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700',
@@ -193,7 +194,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
                 ? 'text-zinc-700 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800'
                 : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
             }`}
-            title={leftOpen ? "Collapse Step Outline (Cmd+B)" : "Expand Step Outline (Cmd+B)"}
+            title={leftOpen ? `Collapse Step Outline (${cmdLabel}+B)` : `Expand Step Outline (${cmdLabel}+B)`}
           >
             <PanelLeft className="w-4 h-4" />
           </button>
@@ -283,7 +284,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
           onClick={(e) => handleRetakeActive('fullscreen', e)}
           disabled={!activeStepId}
           className="p-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors disabled:opacity-30 cursor-pointer"
-          title="Retake full screen for current step (Cmd+Shift+S)"
+          title={`Retake full screen for current step (${cmdLabel}+Shift+S)`}
         >
           <Camera className="w-4 h-4" />
         </button>
@@ -293,7 +294,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
           onClick={(e) => handleRetakeActive('selection', e)}
           disabled={!activeStepId}
           className="p-1.5 rounded-md border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-amber-500/90 hover:text-amber-500 transition-colors disabled:opacity-30 cursor-pointer"
-          title="Retake selected area for current step (Cmd+Shift+A)"
+          title={`Retake selected area for current step (${cmdLabel}+Shift+A)`}
         >
           <Crop className="w-4 h-4" />
         </button>
@@ -367,7 +368,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
                 ? 'text-zinc-700 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800'
                 : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
             }`}
-            title={rightOpen ? "Collapse Step Inspector (Cmd+I)" : "Expand Step Inspector (Cmd+I)"}
+            title={rightOpen ? `Collapse Step Inspector (${cmdLabel}+I)` : `Expand Step Inspector (${cmdLabel}+I)`}
           >
             <PanelRight className="w-4 h-4" />
           </button>
