@@ -55,11 +55,6 @@ export const ProjectLibrary: React.FC = () => {
   // Clear search when switching tabs so results don't bleed across views
   useEffect(() => { setSearchQuery(''); }, [libraryTab]);
 
-  const [showNewModal, setShowNewModal] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [newAuthor, setNewAuthor] = useState('');
-
   // Dropdown / Rename Modal state
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
@@ -196,6 +191,10 @@ export const ProjectLibrary: React.FC = () => {
       };
     }
     if (typeof window !== 'undefined' && window.electronAPI?.minimizeToOverlay) {
+      // Ensure overlay reflects library/FAQ standby instead of stale project context.
+      if (window.electronAPI.syncActiveProject) {
+        window.electronAPI.syncActiveProject(null);
+      }
       window.electronAPI.minimizeToOverlay(anchor);
     }
   };
@@ -235,14 +234,8 @@ export const ProjectLibrary: React.FC = () => {
     );
   }, [projects, searchQuery]);
 
-  const handleCreateNew = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
-    createProject(newTitle.trim(), newDescription.trim(), newAuthor.trim() || undefined);
-    setShowNewModal(false);
-    setNewTitle('');
-    setNewDescription('');
-    setNewAuthor('');
+  const handleCreateNewSop = () => {
+    createProject();
   };
 
   const handleSaveRename = (e: React.FormEvent) => {
@@ -340,7 +333,7 @@ export const ProjectLibrary: React.FC = () => {
             type="button"
             onClick={() => {
               if (libraryTab === 'sop') {
-                setShowNewModal(true);
+                handleCreateNewSop();
               } else {
                 setEditorItem(null);
                 setShowEditorModal(true);
@@ -661,7 +654,7 @@ export const ProjectLibrary: React.FC = () => {
               </button>
             ) : (
               <button
-                onClick={() => setShowNewModal(true)}
+                onClick={handleCreateNewSop}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-950 text-xs font-medium transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -856,80 +849,6 @@ export const ProjectLibrary: React.FC = () => {
       )}
         </div>
       </div>
-
-      {/* New Project Modal */}
-      {showNewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl max-w-md w-full p-5 overflow-hidden">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
-              Create New SOP Procedure
-            </h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
-              Enter procedure details to begin drafting your standardized workflow.
-            </p>
-
-            <form onSubmit={handleCreateNew} className="space-y-3">
-              <div>
-                <label className="block text-[11px] font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Procedure Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Employee Onboarding Security Setup"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-md bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Description
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="Summary of the process purpose, target audience, and expected outcome..."
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-md bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Author / Department
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Operations Team"
-                  value={newAuthor}
-                  onChange={(e) => setNewAuthor(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-md bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
-                <button
-                  type="button"
-                  onClick={() => setShowNewModal(false)}
-                  className="px-3 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!newTitle.trim()}
-                  className="px-3 py-1.5 text-xs font-medium bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors disabled:opacity-40"
-                >
-                  Create &amp; Open
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Rename Dialog */}
       {renamingProject && (
