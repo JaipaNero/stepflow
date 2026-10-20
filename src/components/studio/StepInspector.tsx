@@ -170,6 +170,20 @@ export const StepInspector: React.FC<StepInspectorProps> = ({
               </div>
 
               <div>
+                <label className="text-[10px] text-zinc-500 block mb-0.5">Description</label>
+                <textarea
+                  rows={3}
+                  placeholder="What this SOP covers and who it is for..."
+                  value={cover.subtitle || activeProject.description || ''}
+                  onChange={(e) => {
+                    updateCoverPageSettings({ subtitle: e.target.value });
+                    updateProjectDetails({ description: e.target.value });
+                  }}
+                  className="w-full px-2 py-1 text-xs rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 resize-none"
+                />
+              </div>
+
+              <div>
                 <label className="text-[10px] text-zinc-500 block mb-0.5">Department / Org</label>
                 <input
                   type="text"

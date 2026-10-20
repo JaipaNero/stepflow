@@ -186,7 +186,7 @@ const initialSavedActiveId = typeof localStorage !== 'undefined' ? localStorage.
 export const useSopStore = create<SopState>((set, get) => ({
   projects: initialProjects,
   activeProject: initialActiveProject,
-  activeStepId: initialActiveProject?.steps[0]?.id || null,
+  activeStepId: initialActiveProject?.steps[0]?.id || (initialActiveProject ? 'cover' : null),
   activeView: (initialActiveProject && initialSavedActiveId) ? 'studio' : 'library',
   isCapturing: false,
   recentCapture: null,
@@ -232,7 +232,7 @@ export const useSopStore = create<SopState>((set, get) => ({
         set({
           projects: loadedProjects,
           activeProject: active,
-          activeStepId: active.steps[0]?.id || null,
+          activeStepId: active.steps[0]?.id || 'cover',
           activeView: 'studio'
         });
       } else {
@@ -249,7 +249,7 @@ export const useSopStore = create<SopState>((set, get) => ({
       set({
         projects,
         activeProject,
-        activeStepId: activeProject?.steps[0]?.id || null
+        activeStepId: activeProject?.steps[0]?.id || (activeProject ? 'cover' : null)
       });
     }
   },
@@ -280,7 +280,7 @@ export const useSopStore = create<SopState>((set, get) => ({
     set({
       projects: updatedProjects,
       activeProject: newProject,
-      activeStepId: null,
+      activeStepId: 'cover',
       activeView: 'studio'
     });
 
@@ -313,7 +313,7 @@ export const useSopStore = create<SopState>((set, get) => ({
       }
       set({
         activeProject: normalized,
-        activeStepId: normalized.steps[0]?.id || null,
+        activeStepId: normalized.steps[0]?.id || 'cover',
         activeView: 'studio'
       });
     }
@@ -407,7 +407,7 @@ export const useSopStore = create<SopState>((set, get) => ({
     set({
       projects: updatedProjects,
       activeProject: nextActive,
-      activeStepId: nextActive ? nextActive.steps[0]?.id || null : null,
+      activeStepId: nextActive ? nextActive.steps[0]?.id || 'cover' : null,
       activeView: nextActive ? 'studio' : 'library'
     });
   },
@@ -652,7 +652,7 @@ export const useSopStore = create<SopState>((set, get) => ({
 
     let nextActiveStepId = activeStepId;
     if (activeStepId === stepId) {
-      nextActiveStepId = remainingSteps[stepIndex]?.id || remainingSteps[stepIndex - 1]?.id || remainingSteps[0]?.id || null;
+      nextActiveStepId = remainingSteps[stepIndex]?.id || remainingSteps[stepIndex - 1]?.id || remainingSteps[0]?.id || 'cover';
     }
 
     const updatedProject: SopProject = {
