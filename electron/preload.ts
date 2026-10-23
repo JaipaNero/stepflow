@@ -115,6 +115,17 @@ const electronAPI: IpcBridge = {
       ipcRenderer.removeListener('open-search-hud', handler);
     };
   },
+  onOcrStatus: (callback) => {
+    const handler = (_event: IpcRendererEvent, status: {
+      phase: 'preparing' | 'initializing' | 'recognizing' | 'matching' | 'complete' | 'error';
+      progress: number;
+      message: string;
+    }) => callback(status);
+    ipcRenderer.on('ocr-status', handler);
+    return () => {
+      ipcRenderer.removeListener('ocr-status', handler);
+    };
+  },
 
   // Workspace & Shared Storage
   getWorkspacePath: (): Promise<{ path: string; isCustom: boolean; defaultPath: string }> => {

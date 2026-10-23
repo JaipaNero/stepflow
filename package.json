@@ -15,8 +15,8 @@
     "build:mcp": "tsc -p tsconfig.electron.json",
     "build:icon": "node scripts/render-icon-node.js",
     "dist:win": "npm run dist:win:exe",
-    "dist:win:exe": "npm run build && electron-builder --win nsis --x64",
-    "dist:win:zip": "npm run build && electron-builder --win zip --x64",
+    "dist:win:exe": "npm run build:icon && npm run build && electron-builder --win nsis --x64",
+    "dist:win:zip": "npm run build:icon && npm run build && electron-builder --win zip --x64",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:dir": "npm run build && electron-builder --dir"
   },
@@ -31,8 +31,10 @@
       "dist-electron/**/*",
       "package.json"
     ],
+    "extraResources": [
+      "eng.traineddata"
+    ],
     "win": {
-      "signAndEditExecutable": false,
       "target": [
         {
           "target": "zip",
@@ -48,7 +50,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "StepFlow"
+      "shortcutName": "StepFlow",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
     },
     "mac": {
       "target": [

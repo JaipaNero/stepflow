@@ -38,6 +38,7 @@ let overlayWindow: BrowserWindow | null = null;
 let isCapturing = false;
 let lastActiveProject: SopProject | null = null;
 let currentRetakeStepId: string | null = null;
+const ERROR_FAQ_ENABLED = false;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
@@ -371,8 +372,8 @@ function setOverlayMode(mode: 'collapsed' | 'expanded' | 'preview' | 'error_matc
     collapsed: { width: 340, height: 76 },
     expanded: { width: 380, height: 280 },
     preview: { width: 340, height: 180 },
-    error_match: { width: 380, height: 320 },
-    error_new: { width: 400, height: 420 },
+    error_match: { width: 430, height: 380 },
+    error_new: { width: 500, height: 620 },
     search: { width: 540, height: 460 },
   };
 
@@ -607,14 +608,8 @@ async function performCapture(isRetake = false, mode: 'fullscreen' | 'selection'
       return fallbackDataUri;
     }
 
-    // Convert captured PNG to standard base64 data URI so browser/Konva can render it immediately
-    let capturePayload = filePath;
-    try {
-      const imgBuffer = await fs.promises.readFile(filePath);
-      capturePayload = `data:image/png;base64,${imgBuffer.toString('base64')}`;
-    } catch (readErr) {
-      console.warn('[Capture] Could not convert to base64, using file path:', readErr);
-    }
+    // Send a canonical path-based asset URL so Windows path parsing stays deterministic.
+    const capturePayload = `stepflow-asset:///${encodeURIComponent(filePath.replace(/\\/g, '/'))}`;
 
     // Broadcast capture-completed event to all active windows
     if (studioWindow && !studioWindow.isDestroyed()) {
@@ -706,26 +701,28 @@ function registerGlobalShortcuts(): void {
     console.warn(`[Shortcut] Registration failed for ${selectionShortcut}`);
   }
 
-  // Quick Search HUD shortcut: Cmd/Ctrl+Shift+F
-  const searchShortcut = 'CommandOrControl+Shift+F';
-  const searchSuccess = globalShortcut.register(searchShortcut, () => {
-    try {
-      if (studioWindow && !studioWindow.isDestroyed()) {
-        if (studioWindow.isMinimized()) studioWindow.restore();
-        studioWindow.show();
-        studioWindow.focus();
-        studioWindow.webContents.send('open-search-hud');
+  if (ERROR_FAQ_ENABLED) {
+    // Quick Search HUD shortcut: Cmd/Ctrl+Shift+F
+    const searchShortcut = 'CommandOrControl+Shift+F';
+    const searchSuccess = globalShortcut.register(searchShortcut, () => {
+      try {
+        if (studioWindow && !studioWindow.isDestroyed()) {
+          if (studioWindow.isMinimized()) studioWindow.restore();
+          studioWindow.show();
+          studioWindow.focus();
+          studioWindow.webContents.send('open-search-hud');
+        }
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
+          overlayWindow.webContents.send('open-search-hud');
+        }
+      } catch (err) {
+        console.error('[Shortcut] Error in search HUD shortcut:', err);
       }
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayWindow.webContents.send('open-search-hud');
-      }
-    } catch (err) {
-      console.error('[Shortcut] Error in search HUD shortcut:', err);
-    }
-  });
+    });
 
-  if (!searchSuccess) {
-    console.warn(`[Shortcut] Registration failed for ${searchShortcut}`);
+    if (!searchSuccess) {
+      console.warn(`[Shortcut] Registration failed for ${searchShortcut}`);
+    }
   }
 }
 
@@ -749,6 +746,25 @@ async function showOpenDialogHelper(options: Electron.OpenDialogOptions): Promis
 
 let ocrWorkerInstance: any = null;
 let ocrWorkerInitPromise: Promise<any> | null = null;
+let currentOcrStatusReporter: ((status: string, progress: number) => void) | null = null;
+
+function emitOcrStatus(status: {
+  phase: 'preparing' | 'initializing' | 'recognizing' | 'matching' | 'complete' | 'error';
+  progress: number;
+  message: string;
+}): void {
+  const payload = {
+    ...status,
+    progress: Math.max(0, Math.min(1, status.progress || 0)),
+  };
+
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.webContents.send('ocr-status', payload);
+  }
+  if (studioWindow && !studioWindow.isDestroyed()) {
+    studioWindow.webContents.send('ocr-status', payload);
+  }
+}
 
 async function getOcrWorker(): Promise<any> {
   if (ocrWorkerInstance) return ocrWorkerInstance;
@@ -922,8 +938,24 @@ async function importPastedImageHelper(base64Data: string): Promise<string> {
 async function analyzeImageWithOcr(imagePathOrBase64: string): Promise<OcrAnalysisResult> {
   await ensureDirectories();
   const assetsDir = getAssetsDir();
+  emitOcrStatus({ phase: 'preparing', progress: 0.06, message: 'Preparing image input...' });
 
-  let targetFilePath = imagePathOrBase64;
+  const normalizeInputPath = (raw: string): string => {
+    let normalized = raw || '';
+    if (normalized.startsWith('file://')) {
+      try {
+        normalized = decodeURIComponent(normalized.replace(/^file:\/\//, ''));
+      } catch {
+        normalized = normalized.replace(/^file:\/\//, '');
+      }
+    }
+    if (process.platform === 'win32' && normalized.startsWith('/') && /^[a-zA-Z]:/.test(normalized.slice(1))) {
+      normalized = normalized.slice(1);
+    }
+    return normalized;
+  };
+
+  let targetFilePath = normalizeInputPath(imagePathOrBase64);
   let imageBuffer: Buffer | null = null;
 
   if (imagePathOrBase64.startsWith('data:image/')) {
@@ -932,15 +964,17 @@ async function analyzeImageWithOcr(imagePathOrBase64: string): Promise<OcrAnalys
     const filename = `error_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.png`;
     targetFilePath = path.join(assetsDir, filename);
     await fs.promises.writeFile(targetFilePath, imageBuffer);
-  } else if (!fs.existsSync(imagePathOrBase64)) {
-    throw new Error(`File not found: ${imagePathOrBase64}`);
+    emitOcrStatus({ phase: 'preparing', progress: 0.16, message: 'Saved dropped image for OCR...' });
+  } else if (!fs.existsSync(targetFilePath)) {
+    throw new Error(`File not found: ${targetFilePath}`);
   } else {
-    if (!imagePathOrBase64.startsWith(assetsDir)) {
-      const ext = path.extname(imagePathOrBase64) || '.png';
+    if (!targetFilePath.startsWith(assetsDir)) {
+      const ext = path.extname(targetFilePath) || '.png';
       const filename = `error_${Date.now()}_${Math.random().toString(36).substring(2, 7)}${ext}`;
       const dest = path.join(assetsDir, filename);
-      await fs.promises.copyFile(imagePathOrBase64, dest);
+      await fs.promises.copyFile(targetFilePath, dest);
       targetFilePath = dest;
+      emitOcrStatus({ phase: 'preparing', progress: 0.16, message: 'Copied image into workspace...' });
     }
     imageBuffer = await fs.promises.readFile(targetFilePath);
   }
@@ -965,6 +999,8 @@ async function analyzeImageWithOcr(imagePathOrBase64: string): Promise<OcrAnalys
       }
     }
   }
+
+  emitOcrStatus({ phase: 'complete', progress: 1, message: bestMatch ? 'Match found. Preparing solution card...' : 'No confident match found. Opening add-solution form...' });
 
   return {
     rawText,
@@ -1094,22 +1130,34 @@ function registerIpcHandlers(): void {
 
   // Error & FAQ Knowledge Base + OCR
   ipcMain.handle('analyze-error-image', async (_event, imagePathOrBase64: string): Promise<OcrAnalysisResult> => {
+    if (!ERROR_FAQ_ENABLED) {
+      return {
+        rawText: '',
+        detectedTitle: '',
+        detectedErrorCode: undefined,
+        imagePath: imagePathOrBase64,
+      };
+    }
     return await analyzeImageWithOcr(imagePathOrBase64);
   });
 
   ipcMain.handle('list-error-faq', async (): Promise<ErrorFaqItem[]> => {
+    if (!ERROR_FAQ_ENABLED) return [];
     return await listErrorFaqItems();
   });
 
   ipcMain.handle('save-error-faq', async (_event, item: ErrorFaqItem): Promise<boolean> => {
+    if (!ERROR_FAQ_ENABLED) return false;
     return await saveErrorFaqItem(item);
   });
 
   ipcMain.handle('delete-error-faq', async (_event, id: string): Promise<boolean> => {
+    if (!ERROR_FAQ_ENABLED) return false;
     return await deleteErrorFaqItem(id);
   });
 
   ipcMain.handle('import-pasted-image', async (_event, base64Data: string): Promise<string> => {
+    if (!ERROR_FAQ_ENABLED) return '';
     return await importPastedImageHelper(base64Data);
   });
 
@@ -1642,7 +1690,7 @@ function registerIpcHandlers(): void {
                 const targetName = `step_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${ext}`;
                 const targetPath = path.join(assetsDir, targetName);
                 await fs.promises.writeFile(targetPath, assetBuffer);
-                step.image.originalImagePath = `data:image/png;base64,${assetBuffer.toString('base64')}`;
+                step.image.originalImagePath = `stepflow-asset:///${encodeURIComponent(targetPath.replace(/\\/g, '/'))}`;
               }
             }
           }
@@ -1716,14 +1764,33 @@ app.whenReady().then(async () => {
   // Protocol handler for streaming local assets securely
   protocol.handle('stepflow-asset', (request) => {
     try {
-      let decodedPath = decodeURIComponent(request.url.replace(/^stepflow-asset:\/\//, ''));
-      if (process.platform === 'win32' && decodedPath.startsWith('/') && /^[a-zA-Z]:/.test(decodedPath.slice(1))) {
-        decodedPath = decodedPath.slice(1);
+      let rawPath = request.url.replace(/^stepflow-asset:\/\//, '');
+      if (rawPath.startsWith('/')) {
+        rawPath = rawPath.slice(1);
       }
+
+      let decodedPath = decodeURIComponent(rawPath);
+
+      if (process.platform === 'win32') {
+        if (decodedPath.startsWith('/')) {
+          decodedPath = decodedPath.slice(1);
+        }
+        if (/^[a-zA-Z]:/.test(decodedPath)) {
+          decodedPath = decodedPath.charAt(0).toUpperCase() + decodedPath.slice(1);
+        }
+      }
+
       const resolved = path.resolve(decodedPath);
       const allowedDir = path.resolve(getAssetsDir());
-      // Security check: ensure the resolved path starts with allowedDir
-      if (!resolved.startsWith(allowedDir + path.sep) && resolved !== allowedDir) {
+      const resolvedForCheck = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+      const allowedForCheck = process.platform === 'win32' ? allowedDir.toLowerCase() : allowedDir;
+
+      // Security check: ensure the resolved path stays within the project asset directory.
+      const isWithinAllowedDir =
+        resolvedForCheck === allowedForCheck ||
+        resolvedForCheck.startsWith(`${allowedForCheck}${path.sep}`);
+
+      if (!isWithinAllowedDir) {
         console.warn('[Protocol] Access denied for asset outside allowed directory:', resolved);
         return new Response('Access denied', { status: 403 });
       }

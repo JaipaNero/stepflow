@@ -219,6 +219,13 @@ export interface IpcBridge {
   deleteErrorFaq: (id: string) => Promise<boolean>;
   importPastedImage: (base64Data: string) => Promise<string>;
   onOpenSearchHud?: (callback: () => void) => () => void;
+  onOcrStatus?: (
+    callback: (status: {
+      phase: 'preparing' | 'initializing' | 'recognizing' | 'matching' | 'complete' | 'error';
+      progress: number;
+      message: string;
+    }) => void
+  ) => () => void;
   
   // Workspace & Shared Storage
   getWorkspacePath: () => Promise<{ path: string; isCustom: boolean; defaultPath: string }>;

@@ -11,6 +11,7 @@ import {
   OcrAnalysisResult,
 } from '../types/sop';
 import { SAMPLE_PROJECT, DEFAULT_THEME } from './sampleData';
+import { RELEASE_FEATURES } from '../config/releaseFeatures';
 
 const LOCAL_STORAGE_KEY = 'stepflow_projects';
 const ACTIVE_PROJECT_KEY = 'stepflow_active_project_id';
@@ -92,6 +93,47 @@ function broadcastProjectUpdate(project: SopProject, projects: SopProject[]) {
   }
 }
 
+let pendingProjectBroadcast: { project: SopProject; projects: SopProject[] } | null = null;
+let pendingProjectBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleProjectUpdateBroadcast(project: SopProject, projects: SopProject[], delayMs = 300) {
+  pendingProjectBroadcast = { project, projects };
+  if (pendingProjectBroadcastTimer) {
+    clearTimeout(pendingProjectBroadcastTimer);
+  }
+  pendingProjectBroadcastTimer = setTimeout(() => {
+    const pending = pendingProjectBroadcast;
+    pendingProjectBroadcast = null;
+    pendingProjectBroadcastTimer = null;
+    if (!pending) return;
+    broadcastProjectUpdate(pending.project, pending.projects);
+  }, delayMs);
+}
+
+function normalizeImagePathForRenderer(pathValue?: string | null): string | undefined {
+  if (!pathValue) return undefined;
+
+  const trimmed = pathValue.trim();
+  if (!trimmed) return undefined;
+
+  if (trimmed.startsWith('data:') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith('stepflow-asset://')) {
+    const normalized = trimmed.replace(/^stepflow-asset:\/\/\//, 'stepflow-asset:///');
+    return normalized;
+  }
+
+  // Treat absolute filesystem paths as local assets streamed via custom protocol.
+  if (/^[a-zA-Z]:[\\/]/.test(trimmed) || trimmed.startsWith('\\\\') || trimmed.startsWith('/')) {
+    const safePath = trimmed.replace(/\\/g, '/');
+    return `stepflow-asset:///${encodeURIComponent(safePath)}`;
+  }
+
+  return trimmed;
+}
+
 /**
  * Checks if a step title is a default/auto-generated title (e.g. "Step 10: Action", "Step 10", "Step 10: Important Notes")
  */
@@ -131,7 +173,27 @@ export function updateStepOrderAndTitle(step: SopStep, newOrder: number): SopSte
  * match their new order position.
  */
 export function normalizeProjectSteps(project: SopProject): SopProject {
-  const updatedSteps = project.steps.map((step, idx) => updateStepOrderAndTitle(step, idx + 1));
+  const updatedSteps = project.steps.map((step, idx) => {
+    const normalizedStep = updateStepOrderAndTitle(step, idx + 1);
+
+    if (!normalizedStep.image?.originalImagePath) {
+      return normalizedStep;
+    }
+
+    const normalizedImagePath = normalizeImagePathForRenderer(normalizedStep.image.originalImagePath);
+    if (!normalizedImagePath || normalizedImagePath === normalizedStep.image.originalImagePath) {
+      return normalizedStep;
+    }
+
+    return {
+      ...normalizedStep,
+      image: {
+        ...normalizedStep.image,
+        originalImagePath: normalizedImagePath,
+      },
+    };
+  });
+
   return {
     ...project,
     steps: updatedSteps
@@ -517,6 +579,8 @@ export const useSopStore = create<SopState>((set, get) => ({
       currentProject = get().createProject('New Capture SOP');
     }
 
+    const normalizedImagePath = normalizeImagePathForRenderer(imagePath);
+
     const nextOrder = currentProject.steps.length + 1;
     const newStep: SopStep = {
       id: `step-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -524,9 +588,9 @@ export const useSopStore = create<SopState>((set, get) => ({
       type: 'screenshot',
       title: title || `Step ${nextOrder}: Action`,
       description: description || '',
-      image: imagePath
+      image: normalizedImagePath
         ? {
-            originalImagePath: imagePath,
+            originalImagePath: normalizedImagePath,
             dimensions: { width: 1280, height: 720 },
             annotations: []
           }
@@ -608,7 +672,7 @@ export const useSopStore = create<SopState>((set, get) => ({
       p.id === updatedProject.id ? updatedProject : p
     );
 
-    broadcastProjectUpdate(updatedProject, updatedProjects);
+    scheduleProjectUpdateBroadcast(updatedProject, updatedProjects);
     set({
       activeProject: updatedProject,
       projects: updatedProjects
@@ -732,12 +796,14 @@ export const useSopStore = create<SopState>((set, get) => ({
     const { activeProject, projects } = get();
     if (!activeProject) return;
 
+    const normalizedImagePath = normalizeImagePathForRenderer(newImagePath) || newImagePath;
+
     const updatedSteps = activeProject.steps.map((s) => {
       if (s.id === stepId) {
         return {
           ...s,
           image: {
-            originalImagePath: newImagePath,
+            originalImagePath: normalizedImagePath,
             dimensions: s.image?.dimensions || { width: 1280, height: 720 },
             annotations: s.image?.annotations || []
           }
@@ -790,7 +856,7 @@ export const useSopStore = create<SopState>((set, get) => ({
       p.id === updatedProject.id ? updatedProject : p
     );
 
-    broadcastProjectUpdate(updatedProject, updatedProjects);
+    scheduleProjectUpdateBroadcast(updatedProject, updatedProjects);
     set({
       activeProject: updatedProject,
       projects: updatedProjects
@@ -862,10 +928,14 @@ export const useSopStore = create<SopState>((set, get) => ({
   },
 
   setRecentCapture: (capture: string | null) => {
-    set({ recentCapture: capture });
+    set({ recentCapture: normalizeImagePathForRenderer(capture) || null });
   },
 
   loadErrorFaq: async () => {
+    if (!RELEASE_FEATURES.errorFaq) {
+      set({ errorFaqItems: [] });
+      return;
+    }
     try {
       if (typeof window !== 'undefined' && window.electronAPI?.listErrorFaq) {
         const items = await window.electronAPI.listErrorFaq();
@@ -877,6 +947,9 @@ export const useSopStore = create<SopState>((set, get) => ({
   },
 
   saveErrorFaqItem: async (item: ErrorFaqItem): Promise<boolean> => {
+    if (!RELEASE_FEATURES.errorFaq) {
+      return false;
+    }
     try {
       if (typeof window !== 'undefined' && window.electronAPI?.saveErrorFaq) {
         const success = await window.electronAPI.saveErrorFaq(item);
@@ -902,6 +975,9 @@ export const useSopStore = create<SopState>((set, get) => ({
   },
 
   deleteErrorFaqItem: async (id: string): Promise<boolean> => {
+    if (!RELEASE_FEATURES.errorFaq) {
+      return false;
+    }
     try {
       if (typeof window !== 'undefined' && window.electronAPI?.deleteErrorFaq) {
         const success = await window.electronAPI.deleteErrorFaq(id);
@@ -927,10 +1003,18 @@ export const useSopStore = create<SopState>((set, get) => ({
   },
 
   setIsSearchHudOpen: (isOpen: boolean) => {
+    if (!RELEASE_FEATURES.errorFaq) {
+      set({ isSearchHudOpen: false });
+      return;
+    }
     set({ isSearchHudOpen: isOpen });
   },
 
   analyzeImageWithOcr: async (imagePathOrBase64: string): Promise<OcrAnalysisResult | null> => {
+    if (!RELEASE_FEATURES.errorFaq) {
+      set({ isAnalyzingOcr: false, activeErrorAnalysis: null });
+      return null;
+    }
     set({ isAnalyzingOcr: true });
     try {
       if (typeof window !== 'undefined' && window.electronAPI?.analyzeErrorImage) {

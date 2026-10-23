@@ -74,7 +74,7 @@ export const ErrorKnowledgeBaseView: React.FC<ErrorKnowledgeBaseViewProps> = ({ 
   const formatAssetUrl = (path?: string) => {
     if (!path) return '';
     if (path.startsWith('data:') || path.startsWith('http')) return path;
-    return `stepflow-asset://${path}`;
+    return `stepflow-asset://${encodeURIComponent(path)}`;
   };
 
   return (
